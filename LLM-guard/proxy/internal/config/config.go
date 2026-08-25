@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-	
 type Config struct {
 	ListenAddr string         `yaml:"listen_addr"`
 	Upstream   UpstreamConfig `yaml:"upstream"`
@@ -20,7 +19,6 @@ type UpstreamConfig struct {
 	BaseURL   string `yaml:"base_url"`
 	APIKeyEnv string `yaml:"api_key_env"`
 }
-
 
 type DLPConfig struct {
 	Enabled bool   `yaml:"enabled"`
@@ -61,6 +59,7 @@ func Load(path string) (*Config, error) {
 
 	return &cfg, nil
 }
+
 func parseYAML(r io.Reader) (map[string]string, error) {
 	out := map[string]string{}
 	section := ""

@@ -7,7 +7,7 @@ import (
 
 type RequestContext struct {
 	RequestID string
-	UserID    string 
+	UserID    string
 	Metadata  map[string]any
 }
 
@@ -16,8 +16,6 @@ type PreHook interface {
 	HandleRequest(ctx context.Context, rc *RequestContext, body []byte) ([]byte, error)
 }
 
-// PostHook runs on the way OUT, after the LLM responds, before the
-// response reaches the user.
 type PostHook interface {
 	Name() string
 	HandleResponse(ctx context.Context, rc *RequestContext, body []byte) ([]byte, error)
@@ -50,7 +48,6 @@ func (c *Chain) RunPre(ctx context.Context, rc *RequestContext, body []byte) ([]
 	}
 	return body, nil
 }
-
 func (c *Chain) RunPost(ctx context.Context, rc *RequestContext, body []byte) ([]byte, error) {
 	var err error
 	for _, h := range c.post {

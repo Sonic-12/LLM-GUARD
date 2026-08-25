@@ -2,7 +2,7 @@ package middleware
 
 import "context"
 
-// Passthrough is a no-op hook; it's for future hooks and proof the chain executes.
+// Passthrough is a no-op hook; template for future hooks and proof the chain executes.
 type Passthrough struct{}
 
 func (Passthrough) Name() string { return "passthrough" }

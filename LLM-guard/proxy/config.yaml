@@ -1,0 +1,14 @@
+# LLM-Guard proxy configuration.
+
+
+listen_addr: ":8080"
+
+upstream:
+  type: llama      
+  base_url: "http://localhost:11434/v1"
+  api_key_env: ""
+
+
+dlp:
+  enabled: false
+  base_url: "http://localhost:9100"

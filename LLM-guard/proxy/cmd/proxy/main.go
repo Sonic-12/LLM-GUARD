@@ -9,6 +9,7 @@ import (
 	"llmguard/proxy/internal/config"
 	"llmguard/proxy/internal/middleware"
 	"llmguard/proxy/internal/proxy"
+	"llmguard/proxy/internal/rules"
 )
 
 func main() {
@@ -20,7 +21,13 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	rulesCfg, err := rules.LoadConfig("rules.yaml")
+	if err != nil {
+		log.Fatalf("failed to load rules.yaml: %v", err)
+	}
+
 	chain := middleware.NewChain()
+	chain.UsePre(rules.New(rulesCfg))
 	chain.UsePre(middleware.Passthrough{})
 	chain.UsePost(middleware.Passthrough{})
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"llmguard/proxy/internal/config"
@@ -27,7 +28,6 @@ func New(cfg *config.Config, chain *middleware.Chain) *Server {
 		http:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
-
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	rc := &middleware.RequestContext{
@@ -79,6 +79,12 @@ func (s *Server) forward(r *http.Request, body []byte) ([]byte, int, error) {
 		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+
+	if s.cfg.Upstream.APIKeyEnv != "" {
+		if key := os.Getenv(s.cfg.Upstream.APIKeyEnv); key != "" {
+			req.Header.Set("Authorization", "Bearer "+key)
+		}
+	}
 
 	resp, err := s.http.Do(req)
 	if err != nil {
