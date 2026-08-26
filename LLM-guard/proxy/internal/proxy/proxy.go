@@ -25,7 +25,7 @@ func New(cfg *config.Config, chain *middleware.Chain) *Server {
 	return &Server{
 		cfg:   cfg,
 		chain: chain,
-		http:  &http.Client{Timeout: 30 * time.Second},
+		http:  &http.Client{Timeout: 90 * time.Second},
 	}
 }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

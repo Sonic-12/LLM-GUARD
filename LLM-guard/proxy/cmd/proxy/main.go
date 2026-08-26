@@ -5,8 +5,10 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"time"
 
 	"llmguard/proxy/internal/config"
+	"llmguard/proxy/internal/jailbreak"
 	"llmguard/proxy/internal/middleware"
 	"llmguard/proxy/internal/proxy"
 	"llmguard/proxy/internal/rules"
@@ -28,6 +30,13 @@ func main() {
 
 	chain := middleware.NewChain()
 	chain.UsePre(rules.New(rulesCfg))
+	chain.UsePre(jailbreak.New(jailbreak.Config{
+		OllamaURL:      rulesCfg.Jailbreak.OllamaURL,
+		Model:          rulesCfg.Jailbreak.Model,
+		Threshold:      rulesCfg.Jailbreak.Threshold,
+		SystemPrompt:   rulesCfg.Jailbreak.SystemPrompt,
+		RequestTimeout: 45 * time.Second,
+	}))
 	chain.UsePre(middleware.Passthrough{})
 	chain.UsePost(middleware.Passthrough{})
 

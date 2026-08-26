@@ -19,6 +19,14 @@ type Config struct {
 	MaxPromptLength       int
 	BlockedKeywords       []string
 	SystemOverridePhrases []string
+	Jailbreak             JailbreakConfig
+}
+
+type JailbreakConfig struct {
+	OllamaURL    string
+	Model        string
+	Threshold    float64
+	SystemPrompt string
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -30,6 +38,7 @@ func LoadConfig(path string) (Config, error) {
 
 	cfg := Config{MaxPromptLength: 4000}
 	var target *[]string
+	section := ""
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -38,6 +47,8 @@ func LoadConfig(path string) (Config, error) {
 		if trimmed == "" {
 			continue
 		}
+
+		indented := strings.HasPrefix(line, "  ")
 
 		if strings.HasPrefix(trimmed, "- ") {
 			if target == nil {
@@ -54,18 +65,39 @@ func LoadConfig(path string) (Config, error) {
 			val = strings.Trim(strings.TrimSpace(parts[1]), `"'`)
 		}
 
-		switch key {
-		case "max_prompt_length":
+		if !indented {
 			target = nil
-			if n, err := strconv.Atoi(val); err == nil {
-				cfg.MaxPromptLength = n
+			if val == "" {
+				section = key
+				continue
 			}
-		case "blocked_keywords":
-			target = &cfg.BlockedKeywords
-		case "system_override_phrases":
-			target = &cfg.SystemOverridePhrases
-		default:
-			target = nil
+			section = ""
+			switch key {
+			case "max_prompt_length":
+				if n, err := strconv.Atoi(val); err == nil {
+					cfg.MaxPromptLength = n
+				}
+			case "blocked_keywords":
+				target = &cfg.BlockedKeywords
+			case "system_override_phrases":
+				target = &cfg.SystemOverridePhrases
+			}
+			continue
+		}
+
+		if section == "jailbreak" {
+			switch key {
+			case "ollama_url":
+				cfg.Jailbreak.OllamaURL = val
+			case "model":
+				cfg.Jailbreak.Model = val
+			case "threshold":
+				if f, err := strconv.ParseFloat(val, 64); err == nil {
+					cfg.Jailbreak.Threshold = f
+				}
+			case "system_prompt":
+				cfg.Jailbreak.SystemPrompt = val
+			}
 		}
 	}
 	return cfg, scanner.Err()
