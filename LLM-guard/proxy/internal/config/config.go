@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -18,6 +20,15 @@ type UpstreamConfig struct {
 	Type      string `yaml:"type"`
 	BaseURL   string `yaml:"base_url"`
 	APIKeyEnv string `yaml:"api_key_env"`
+
+	DefaultModel string `yaml:"default_model"` // used for every request unless PremiumModel is explicitly requested
+	PremiumModel string `yaml:"premium_model"` // opt-in only; used only when client requests this exact model name
+
+	PremiumTimeout time.Duration `yaml:"-"` // how long we wait on PremiumModel before falling back to DefaultModel
+
+	DefaultNumPredict  int `yaml:"-"` // cap on DefaultModel's answer (direct path, not racing anything)
+	PremiumNumPredict  int `yaml:"-"` // cap on PremiumModel's answer (shortens the race itself)
+	FallbackNumPredict int `yaml:"-"` // cap when PremiumModel timed out and we fell back to DefaultModel
 }
 
 type DLPConfig struct {
@@ -40,9 +51,11 @@ func Load(path string) (*Config, error) {
 	cfg := Config{
 		ListenAddr: flat["listen_addr"],
 		Upstream: UpstreamConfig{
-			Type:      flat["upstream.type"],
-			BaseURL:   flat["upstream.base_url"],
-			APIKeyEnv: flat["upstream.api_key_env"],
+			Type:         flat["upstream.type"],
+			BaseURL:      flat["upstream.base_url"],
+			APIKeyEnv:    flat["upstream.api_key_env"],
+			DefaultModel: flat["upstream.default_model"],
+			PremiumModel: flat["upstream.premium_model"],
 		},
 		DLP: DLPConfig{
 			Enabled: flat["dlp.enabled"] == "true",
@@ -57,6 +70,34 @@ func Load(path string) (*Config, error) {
 		cfg.Upstream.Type = "mock"
 	}
 
+	cfg.Upstream.PremiumTimeout = 20 * time.Second
+	if v := flat["upstream.premium_timeout_seconds"]; v != "" {
+		if sec, err := strconv.Atoi(v); err == nil && sec > 0 {
+			cfg.Upstream.PremiumTimeout = time.Duration(sec) * time.Second
+		}
+	}
+
+	cfg.Upstream.DefaultNumPredict = 500
+	if v := flat["upstream.default_num_predict"]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Upstream.DefaultNumPredict = n
+		}
+	}
+
+	cfg.Upstream.PremiumNumPredict = 400
+	if v := flat["upstream.premium_num_predict"]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Upstream.PremiumNumPredict = n
+		}
+	}
+
+	cfg.Upstream.FallbackNumPredict = 300
+	if v := flat["upstream.fallback_num_predict"]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Upstream.FallbackNumPredict = n
+		}
+	}
+
 	return &cfg, nil
 }
 
@@ -68,7 +109,6 @@ func parseYAML(r io.Reader) (map[string]string, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Strip comments.
 		if idx := strings.Index(line, "#"); idx >= 0 {
 			line = line[:idx]
 		}

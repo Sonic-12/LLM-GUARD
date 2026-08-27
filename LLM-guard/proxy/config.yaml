@@ -1,13 +1,19 @@
 # LLM-Guard proxy configuration.
 
-
 listen_addr: ":8080"
 
 upstream:
-  type: llama      
+  type: llama
   base_url: "http://localhost:11434/v1"
   api_key_env: ""
 
+  default_model: "llama3.2:3b"     # used for every request unless premium_model is explicitly requested
+  premium_model: "llama3.1:8b"     # opt-in only client must send this exact model name to trigger it
+
+  premium_timeout_seconds: 20      # how long we wait on premium model before falling back to default model
+  default_num_predict: 500         # cap for default_model direct answers
+  premium_num_predict: 400         # cap for premium_model answer (shortens the race itself)
+  fallback_num_predict: 300        # cap when premium timed out and we fell back to default_model
 
 dlp:
   enabled: false

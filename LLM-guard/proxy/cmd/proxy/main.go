@@ -35,7 +35,7 @@ func main() {
 		Model:          rulesCfg.Jailbreak.Model,
 		Threshold:      rulesCfg.Jailbreak.Threshold,
 		SystemPrompt:   rulesCfg.Jailbreak.SystemPrompt,
-		RequestTimeout: 45 * time.Second,
+		RequestTimeout: 15 * time.Second,
 	}))
 	chain.UsePre(middleware.Passthrough{})
 	chain.UsePost(middleware.Passthrough{})

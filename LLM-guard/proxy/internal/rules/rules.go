@@ -67,20 +67,22 @@ func LoadConfig(path string) (Config, error) {
 
 		if !indented {
 			target = nil
-			if val == "" {
-				section = key
-				continue
-			}
 			section = ""
 			switch key {
 			case "max_prompt_length":
-				if n, err := strconv.Atoi(val); err == nil {
-					cfg.MaxPromptLength = n
+				if val != "" {
+					if n, err := strconv.Atoi(val); err == nil {
+						cfg.MaxPromptLength = n
+					}
 				}
 			case "blocked_keywords":
 				target = &cfg.BlockedKeywords
 			case "system_override_phrases":
 				target = &cfg.SystemOverridePhrases
+			default:
+				if val == "" {
+					section = key
+				}
 			}
 			continue
 		}

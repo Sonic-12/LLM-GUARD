@@ -2,8 +2,11 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -49,7 +52,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respBody, status, err := s.forward(r, body)
+	respBody, status, err := s.forward(r, rc.RequestID, body)
 	if err != nil {
 		log.Printf("[%s] upstream error: %v", rc.RequestID, err)
 		http.Error(w, "upstream LLM request failed", http.StatusBadGateway)
@@ -71,10 +74,59 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[%s] %s %s -> %d (%s)", rc.RequestID, r.Method, r.URL.Path, status, time.Since(start))
 }
 
-func (s *Server) forward(r *http.Request, body []byte) ([]byte, int, error) {
+func (s *Server) forward(r *http.Request, requestID string, body []byte) ([]byte, int, error) {
 	target := s.cfg.Upstream.BaseURL + r.URL.Path
 
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, target, bytes.NewReader(body))
+	requestedModel, err := extractModel(body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("could not parse request body: %w", err)
+	}
+
+	// Only an explicit request for PremiumModel gets the race against a
+	// timeout. Everything else (empty, DefaultModel, or anything
+	// unrecognized) goes straight to DefaultModel with no wait at all.
+	if s.cfg.Upstream.PremiumModel == "" || requestedModel != s.cfg.Upstream.PremiumModel {
+		defaultBody, err := withModel(body, s.cfg.Upstream.DefaultModel, s.cfg.Upstream.DefaultNumPredict)
+		if err != nil {
+			return nil, 0, err
+		}
+		return s.doForward(r.Context(), r.Method, target, defaultBody)
+	}
+
+	premiumBody, err := withModel(body, s.cfg.Upstream.PremiumModel, s.cfg.Upstream.PremiumNumPredict)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	premiumCtx, cancel := context.WithTimeout(r.Context(), s.cfg.Upstream.PremiumTimeout)
+	defer cancel()
+
+	respBody, status, err := s.doForward(premiumCtx, r.Method, target, premiumBody)
+	if err == nil {
+		return respBody, status, nil
+	}
+	if !errors.Is(premiumCtx.Err(), context.DeadlineExceeded) {
+		// Not a timeout (connection refused, bad response, etc.) - don't retry.
+		return nil, 0, err
+	}
+
+	log.Printf("[%s] premium model timed out after %s, falling back to %s", requestID, s.cfg.Upstream.PremiumTimeout, s.cfg.Upstream.DefaultModel)
+
+	fallbackBody, ferr := withModel(body, s.cfg.Upstream.DefaultModel, s.cfg.Upstream.FallbackNumPredict)
+	if ferr != nil {
+		return nil, 0, ferr
+	}
+
+	respBody, status, err = s.doForward(r.Context(), r.Method, target, fallbackBody)
+	if err != nil {
+		return nil, 0, err
+	}
+	log.Printf("[%s] fallback model %s answered", requestID, s.cfg.Upstream.DefaultModel)
+	return respBody, status, nil
+}
+
+func (s *Server) doForward(ctx context.Context, method, target string, body []byte) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -98,6 +150,28 @@ func (s *Server) forward(r *http.Request, body []byte) ([]byte, int, error) {
 	}
 
 	return respBody, resp.StatusCode, nil
+}
+
+func extractModel(body []byte) (string, error) {
+	var m struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(body, &m); err != nil {
+		return "", err
+	}
+	return m.Model, nil
+}
+
+func withModel(body []byte, model string, maxTokens int) ([]byte, error) {
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return nil, fmt.Errorf("could not parse request to apply model: %w", err)
+	}
+	m["model"] = model
+	if maxTokens > 0 {
+		m["max_tokens"] = maxTokens
+	}
+	return json.Marshal(m)
 }
 
 func newRequestID() string {
