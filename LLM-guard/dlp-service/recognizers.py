@@ -1,4 +1,4 @@
-"""Custom Presidio recognizers not covered by the built-in analyzer."""
+"Custom Presidio recognizers not covered by the built-in analyzer."
 
 from presidio_analyzer import Pattern, PatternRecognizer
 

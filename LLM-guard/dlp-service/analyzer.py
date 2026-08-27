@@ -1,4 +1,4 @@
-"""Builds the Presidio AnalyzerEngine with built-in + custom recognizers."""
+"Builds the Presidio AnalyzerEngine with built-in + custom recognizers."
 
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider

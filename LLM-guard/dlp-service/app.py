@@ -1,4 +1,4 @@
-"""DLP service: POST /redact -> masked text + token-to-original mapping."""
+"DLP service: POST /redact -> masked text + token-to-original mapping."
 
 import uuid
 
