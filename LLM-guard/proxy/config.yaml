@@ -4,7 +4,7 @@ listen_addr: ":8080"
 
 upstream:
   type: llama
-  base_url: "http://localhost:11434/v1"
+  base_url: "http://localhost:11434
   api_key_env: ""
 
   default_model: "llama3.2:3b"     # used for every request unless premium_model is explicitly requested
@@ -16,5 +16,5 @@ upstream:
   fallback_num_predict: 300        # cap when premium timed out and we fell back to default_model
 
 dlp:
-  enabled: false
-  base_url: "http://localhost:9100"
+  enabled: true
+  base_url: "http://127.0.0.1:9100

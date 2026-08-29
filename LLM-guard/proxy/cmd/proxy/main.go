@@ -5,13 +5,11 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"time"
 
 	"llmguard/proxy/internal/config"
-	"llmguard/proxy/internal/jailbreak"
+	"llmguard/proxy/internal/dlp"
 	"llmguard/proxy/internal/middleware"
 	"llmguard/proxy/internal/proxy"
-	"llmguard/proxy/internal/rules"
 )
 
 func main() {
@@ -23,22 +21,15 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	rulesCfg, err := rules.LoadConfig("rules.yaml")
-	if err != nil {
-		log.Fatalf("failed to load rules.yaml: %v", err)
-	}
-
 	chain := middleware.NewChain()
-	chain.UsePre(rules.New(rulesCfg))
-	chain.UsePre(jailbreak.New(jailbreak.Config{
-		OllamaURL:      rulesCfg.Jailbreak.OllamaURL,
-		Model:          rulesCfg.Jailbreak.Model,
-		Threshold:      rulesCfg.Jailbreak.Threshold,
-		SystemPrompt:   rulesCfg.Jailbreak.SystemPrompt,
-		RequestTimeout: 15 * time.Second,
-	}))
+	dlpHook := dlp.New(dlp.Config{
+		BaseURL: cfg.DLP.BaseURL,
+		Enabled: cfg.DLP.Enabled,
+	})
+	chain.UsePre(dlpHook)
 	chain.UsePre(middleware.Passthrough{})
 	chain.UsePost(middleware.Passthrough{})
+	chain.UsePost(dlpHook)
 
 	srv := proxy.New(cfg, chain)
 

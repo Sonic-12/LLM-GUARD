@@ -19,6 +19,15 @@ class RedactResponse(BaseModel):
     mapping: dict[str, str]
 
 
+class UnmaskRequest(BaseModel):
+    text: str
+    mapping: dict[str, str]
+
+
+class UnmaskResponse(BaseModel):
+    text: str
+
+
 @app.post("/redact", response_model=RedactResponse)
 def redact(req: RedactRequest) -> RedactResponse:
     results = analyze(req.text)
@@ -34,6 +43,14 @@ def redact(req: RedactRequest) -> RedactResponse:
         text = text[:r.start] + token + text[r.end:]
 
     return RedactResponse(redacted_text=text, mapping=mapping)
+
+
+@app.post("/unmask", response_model=UnmaskResponse)
+def unmask(req: UnmaskRequest) -> UnmaskResponse:
+    text = req.text
+    for token, original in req.mapping.items():
+        text = text.replace(token, original)
+    return UnmaskResponse(text=text)
 
 
 @app.get("/health")
