@@ -45,7 +45,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
+	preStart := time.Now()
 	body, err = s.chain.RunPre(r.Context(), rc, body)
+	preDuration := time.Since(preStart)
 	if err != nil {
 		log.Printf("[%s] blocked at pre-request: %v", rc.RequestID, err)
 		http.Error(w, fmt.Sprintf("request blocked: %v", err), http.StatusForbidden)
@@ -59,7 +61,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	postStart := time.Now()
 	respBody, err = s.chain.RunPost(r.Context(), rc, respBody)
+	postDuration := time.Since(postStart)
 	if err != nil {
 		log.Printf("[%s] blocked at post-response: %v", rc.RequestID, err)
 		http.Error(w, fmt.Sprintf("response blocked: %v", err), http.StatusForbidden)
@@ -71,7 +75,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(status)
 	w.Write(respBody)
 
-	log.Printf("[%s] %s %s -> %d (%s)", rc.RequestID, r.Method, r.URL.Path, status, time.Since(start))
+	log.Printf("[%s] %s %s -> %d total=%s pre_hooks=%s post_hooks=%s", rc.RequestID, r.Method, r.URL.Path, status, time.Since(start), preDuration, postDuration)
 }
 
 func (s *Server) forward(r *http.Request, requestID string, body []byte) ([]byte, int, error) {
@@ -82,9 +86,6 @@ func (s *Server) forward(r *http.Request, requestID string, body []byte) ([]byte
 		return nil, 0, fmt.Errorf("could not parse request body: %w", err)
 	}
 
-	// Only an explicit request for PremiumModel gets the race against a
-	// timeout. Everything else (empty, DefaultModel, or anything
-	// unrecognized) goes straight to DefaultModel with no wait at all.
 	if s.cfg.Upstream.PremiumModel == "" || requestedModel != s.cfg.Upstream.PremiumModel {
 		defaultBody, err := withModel(body, s.cfg.Upstream.DefaultModel, s.cfg.Upstream.DefaultNumPredict)
 		if err != nil {
