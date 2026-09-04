@@ -98,9 +98,21 @@ A normal AI response back confirms the full pipeline (proxy → DLP → AI
 model → back) is working end to end.
 
 ---
-
 ## 6. Running Automated Tests
 
+**DLP Redaction Test**
+```powershell
+# tests/test_redact.ps1 — DLP redaction test
+$body = @{
+    text = "My email is testuser@gmail.com, SSN is 402-15-3847, card is 4242 4242 4242 4242, key is sk-abcdefghijklmnopqrstuvwx1234"
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "http://localhost:9100/redact" -Method Post -Body $body -ContentType "application/json"
+
+Write-Host "Redacted: " $response.redacted_text
+```
+
+**Go Integration Tests**
 ```powershell
 cd D:\project\LLM-GUARD\LLM-guard\proxy
 go test ./internal/dlp/... -v
