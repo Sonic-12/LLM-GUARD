@@ -1,0 +1,45 @@
+name: LLM-GUARD CI
+
+on:
+  push:
+    branches: [ main, amritesh ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-go:
+    name: Go Rules & Proxy Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run Go Unit Tests
+        run: go test -v ./...
+
+  test-python:
+    name: Python Firewall Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install scikit-learn joblib fastapi pydantic pytest
+
+      - name: Run Python Unit Tests
+        env:
+          PYTHONPATH: .
+        run: pytest services/firewall/tests/ -v
