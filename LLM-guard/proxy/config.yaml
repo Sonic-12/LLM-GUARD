@@ -17,4 +17,9 @@ upstream:
 
 dlp:
   enabled: true
-  base_url: "http://127.0.0.1:9100
+  base_url: "http://127.0.0.1:9100"
+
+rules:
+  enabled: true
+  max_chars: 4000
+  firewall_url: "http://127.0.0.1:5001"

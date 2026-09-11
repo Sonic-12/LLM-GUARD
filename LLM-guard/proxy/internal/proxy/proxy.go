@@ -16,6 +16,7 @@ import (
 
 	"llmguard/proxy/internal/config"
 	"llmguard/proxy/internal/middleware"
+	"llmguard/proxy/internal/rules"
 )
 
 type Server struct {
@@ -50,6 +51,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	preDuration := time.Since(preStart)
 	if err != nil {
 		log.Printf("[%s] blocked at pre-request: %v", rc.RequestID, err)
+		var blocked *rules.BlockedError
+		if errors.As(err, &blocked) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(blocked.StatusCode)
+			w.Write(blocked.Body)
+			return
+		}
 		http.Error(w, fmt.Sprintf("request blocked: %v", err), http.StatusForbidden)
 		return
 	}

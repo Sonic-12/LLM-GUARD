@@ -14,6 +14,7 @@ type Config struct {
 	ListenAddr string         `yaml:"listen_addr"`
 	Upstream   UpstreamConfig `yaml:"upstream"`
 	DLP        DLPConfig      `yaml:"dlp"`
+	Rules      RulesConfig    `yaml:"rules"`
 }
 
 type UpstreamConfig struct {
@@ -34,6 +35,12 @@ type UpstreamConfig struct {
 type DLPConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	BaseURL string `yaml:"base_url"`
+}
+
+type RulesConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	MaxChars    int    `yaml:"max_chars"`
+	FirewallURL string `yaml:"firewall_url"`
 }
 
 func Load(path string) (*Config, error) {
@@ -60,6 +67,10 @@ func Load(path string) (*Config, error) {
 		DLP: DLPConfig{
 			Enabled: flat["dlp.enabled"] == "true",
 			BaseURL: flat["dlp.base_url"],
+		},
+		Rules: RulesConfig{
+			Enabled:     flat["rules.enabled"] == "true",
+			FirewallURL: flat["rules.firewall_url"],
 		},
 	}
 
@@ -95,6 +106,13 @@ func Load(path string) (*Config, error) {
 	if v := flat["upstream.fallback_num_predict"]; v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.Upstream.FallbackNumPredict = n
+		}
+	}
+
+	cfg.Rules.MaxChars = 4000
+	if v := flat["rules.max_chars"]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Rules.MaxChars = n
 		}
 	}
 

@@ -3,7 +3,7 @@ package rules
 import (
 	"fmt"
 
-	"github.com/Sonic-12/LLM-GUARD/pkg/client"
+	"llmguard/proxy/internal/threatdetect"
 )
 
 type PipelineDecision struct {
@@ -13,11 +13,7 @@ type PipelineDecision struct {
 	JailbreakScore float64 `json:"jailbreak_score,omitempty"`
 }
 
-// EvaluatePrompt runs the short-circuit multi-tier defense pipeline:
-// Tier 1: Length bounds (<0.1ms)
-// Tier 2: Signature Regex blocklist (<0.2ms)
-// Tier 3: Python Semantic ML Classifier (~5-15ms)
-func EvaluatePrompt(prompt string, maxChars int, client *client.FirewallClient) PipelineDecision {
+func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallClient) PipelineDecision {
 	// 1. Length bounds evaluation
 	if valid, violation := CheckLength(prompt, maxChars); !valid {
 		return PipelineDecision{
@@ -40,7 +36,7 @@ func EvaluatePrompt(prompt string, maxChars int, client *client.FirewallClient) 
 	if client != nil {
 		resp, err := client.InspectPrompt(prompt, 0.50)
 		if err != nil {
-			// Fail-safe or fallback on connection failure
+			// Fail-open on connection failure (matches DLP's fail-open policy on /unmask)
 			return PipelineDecision{
 				Allowed:    true,
 				StatusCode: 200,

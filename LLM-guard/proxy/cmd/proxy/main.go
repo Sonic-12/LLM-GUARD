@@ -10,6 +10,7 @@ import (
 	"llmguard/proxy/internal/dlp"
 	"llmguard/proxy/internal/middleware"
 	"llmguard/proxy/internal/proxy"
+	"llmguard/proxy/internal/rules"
 )
 
 func main() {
@@ -22,10 +23,16 @@ func main() {
 	}
 
 	chain := middleware.NewChain()
+	rulesHook := rules.New(rules.Config{
+		Enabled:     cfg.Rules.Enabled,
+		MaxChars:    cfg.Rules.MaxChars,
+		FirewallURL: cfg.Rules.FirewallURL,
+	})
 	dlpHook := dlp.New(dlp.Config{
 		BaseURL: cfg.DLP.BaseURL,
 		Enabled: cfg.DLP.Enabled,
 	})
+	chain.UsePre(rulesHook)
 	chain.UsePre(dlpHook)
 	chain.UsePre(middleware.Passthrough{})
 	chain.UsePost(middleware.Passthrough{})
