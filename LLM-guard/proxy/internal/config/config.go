@@ -22,14 +22,14 @@ type UpstreamConfig struct {
 	BaseURL   string `yaml:"base_url"`
 	APIKeyEnv string `yaml:"api_key_env"`
 
-	DefaultModel string `yaml:"default_model"` // used for every request unless PremiumModel is explicitly requested
-	PremiumModel string `yaml:"premium_model"` // opt-in only; used only when client requests this exact model name
+	DefaultModel string `yaml:"default_model"`
+	PremiumModel string `yaml:"premium_model"`
 
-	PremiumTimeout time.Duration `yaml:"-"` // how long we wait on PremiumModel before falling back to DefaultModel
+	PremiumTimeout time.Duration `yaml:"-"`
 
-	DefaultNumPredict  int `yaml:"-"` // cap on DefaultModel's answer (direct path, not racing anything)
-	PremiumNumPredict  int `yaml:"-"` // cap on PremiumModel's answer (shortens the race itself)
-	FallbackNumPredict int `yaml:"-"` // cap when PremiumModel timed out and we fell back to DefaultModel
+	DefaultNumPredict  int `yaml:"-"`
+	PremiumNumPredict  int `yaml:"-"`
+	FallbackNumPredict int `yaml:"-"`
 }
 
 type DLPConfig struct {

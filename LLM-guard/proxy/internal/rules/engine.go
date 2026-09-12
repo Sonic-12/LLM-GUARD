@@ -13,8 +13,11 @@ type PipelineDecision struct {
 	JailbreakScore float64 `json:"jailbreak_score,omitempty"`
 }
 
+// EvaluatePrompt runs the short-circuit multi-tier defense pipeline:
+// Tier 1: Length bounds (<0.1ms)
+// Tier 2: Signature Regex blocklist (<0.2ms)
+// Tier 3: Python Semantic ML Classifier (~5-15ms)
 func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallClient) PipelineDecision {
-	// 1. Length bounds evaluation
 	if valid, violation := CheckLength(prompt, maxChars); !valid {
 		return PipelineDecision{
 			Allowed:    false,
@@ -23,7 +26,6 @@ func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallCl
 		}
 	}
 
-	// 2. Keyword & signature blocklist evaluation
 	if valid, violation := CheckBlocklist(prompt); !valid {
 		return PipelineDecision{
 			Allowed:    false,
@@ -32,7 +34,6 @@ func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallCl
 		}
 	}
 
-	// 3. Python ML Semantic Jailbreak check (if client provided)
 	if client != nil {
 		resp, err := client.InspectPrompt(prompt, 0.50)
 		if err != nil {

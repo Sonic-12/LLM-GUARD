@@ -115,7 +115,6 @@ func (s *Server) forward(r *http.Request, requestID string, body []byte) ([]byte
 		return respBody, status, nil
 	}
 	if !errors.Is(premiumCtx.Err(), context.DeadlineExceeded) {
-		// Not a timeout (connection refused, bad response, etc.) - don't retry.
 		return nil, 0, err
 	}
 

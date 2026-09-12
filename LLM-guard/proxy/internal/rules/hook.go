@@ -15,6 +15,9 @@ type Config struct {
 	FirewallURL string
 }
 
+// BlockedError carries the pipeline decision so proxy.go can respond with
+// the correct status code (400 length / 403 blocklist,ML) and a JSON body,
+// instead of the flat 403 text used for generic hook errors.
 type BlockedError struct {
 	StatusCode int
 	Body       []byte
@@ -56,10 +59,10 @@ func (h *Hook) HandleRequest(ctx context.Context, rc *middleware.RequestContext,
 			continue
 		}
 		role, _ := msgMap["role"].(string)
-		content, _ := msgMap["content"].(string)
-		if role != "user" || content == "" {
+		if role != "user" {
 			continue
 		}
+		content, _ := msgMap["content"].(string)
 
 		decision := EvaluatePrompt(content, h.cfg.MaxChars, h.client)
 		if !decision.Allowed {
