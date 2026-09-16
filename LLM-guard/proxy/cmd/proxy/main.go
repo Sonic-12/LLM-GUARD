@@ -24,9 +24,10 @@ func main() {
 
 	chain := middleware.NewChain()
 	rulesHook := rules.New(rules.Config{
-		Enabled:     cfg.Rules.Enabled,
-		MaxChars:    cfg.Rules.MaxChars,
-		FirewallURL: cfg.Rules.FirewallURL,
+		Enabled:         cfg.Rules.Enabled,
+		MaxChars:        cfg.Rules.MaxChars,
+		FirewallURL:     cfg.Rules.FirewallURL,
+		DecisionLogPath: cfg.Rules.DecisionLogPath,
 	})
 	dlpHook := dlp.New(dlp.Config{
 		BaseURL: cfg.DLP.BaseURL,

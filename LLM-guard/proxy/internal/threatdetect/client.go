@@ -9,13 +9,13 @@ import (
 )
 
 type InspectionRequest struct {
-	Prompt    string  `json:"prompt"`
-	Threshold float64 `json:"threshold"`
+	Prompt string `json:"prompt"`
 }
 
 type InspectionResponse struct {
 	Allowed        bool    `json:"allowed"`
 	JailbreakScore float64 `json:"jailbreak_score"`
+	ReviewRequired bool    `json:"review_required"`
 	Reason         *string `json:"reason"`
 }
 
@@ -33,11 +33,8 @@ func NewFirewallClient(baseURL string) *FirewallClient {
 	}
 }
 
-func (c *FirewallClient) InspectPrompt(prompt string, threshold float64) (*InspectionResponse, error) {
-	reqBody, err := json.Marshal(InspectionRequest{
-		Prompt:    prompt,
-		Threshold: threshold,
-	})
+func (c *FirewallClient) InspectPrompt(prompt string) (*InspectionResponse, error) {
+	reqBody, err := json.Marshal(InspectionRequest{Prompt: prompt})
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize inspection request: %w", err)
 	}

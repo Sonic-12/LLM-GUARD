@@ -11,19 +11,16 @@ type PipelineDecision struct {
 	StatusCode     int     `json:"status_code"`
 	Reason         string  `json:"reason,omitempty"`
 	JailbreakScore float64 `json:"jailbreak_score,omitempty"`
+	ReviewRequired bool    `json:"review_required,omitempty"`
 }
 
 // EvaluatePrompt runs the short-circuit multi-tier defense pipeline:
 // Tier 1: Length bounds (<0.1ms)
 // Tier 2: Signature Regex blocklist (<0.2ms)
-// Tier 3: Python Semantic ML Classifier (~5-15ms)
+// Tier 3: Python Semantic ML Classifier (~5-15ms), 3-band confidence
 func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallClient) PipelineDecision {
 	if valid, violation := CheckLength(prompt, maxChars); !valid {
-		return PipelineDecision{
-			Allowed:    false,
-			StatusCode: 400,
-			Reason:     violation.Rule,
-		}
+		return PipelineDecision{Allowed: false, StatusCode: 400, Reason: violation.Rule}
 	}
 
 	if valid, violation := CheckBlocklist(prompt); !valid {
@@ -35,14 +32,10 @@ func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallCl
 	}
 
 	if client != nil {
-		resp, err := client.InspectPrompt(prompt, 0.50)
+		resp, err := client.InspectPrompt(prompt)
 		if err != nil {
-			// Fail-open on connection failure (matches DLP's fail-open policy on /unmask)
-			return PipelineDecision{
-				Allowed:    true,
-				StatusCode: 200,
-				Reason:     "INSPECTION_BYPASSED_SERVICE_UNAVAILABLE",
-			}
+			// Fail-open on connection failure
+			return PipelineDecision{Allowed: true, StatusCode: 200, Reason: "INSPECTION_BYPASSED_SERVICE_UNAVAILABLE"}
 		}
 
 		if !resp.Allowed {
@@ -55,14 +48,11 @@ func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallCl
 				StatusCode:     403,
 				Reason:         reason,
 				JailbreakScore: resp.JailbreakScore,
+				ReviewRequired: resp.ReviewRequired,
 			}
 		}
 
-		return PipelineDecision{
-			Allowed:        true,
-			StatusCode:     200,
-			JailbreakScore: resp.JailbreakScore,
-		}
+		return PipelineDecision{Allowed: true, StatusCode: 200, JailbreakScore: resp.JailbreakScore}
 	}
 
 	return PipelineDecision{Allowed: true, StatusCode: 200}

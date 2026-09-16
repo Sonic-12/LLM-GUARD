@@ -22,14 +22,14 @@ type UpstreamConfig struct {
 	BaseURL   string `yaml:"base_url"`
 	APIKeyEnv string `yaml:"api_key_env"`
 
-	DefaultModel string `yaml:"default_model"`
-	PremiumModel string `yaml:"premium_model"`
+	DefaultModel string `yaml:"default_model"` // used for every request unless PremiumModel is explicitly requested
+	PremiumModel string `yaml:"premium_model"` // opt-in only; used only when client requests this exact model name
 
-	PremiumTimeout time.Duration `yaml:"-"`
+	PremiumTimeout time.Duration `yaml:"-"` // how long we wait on PremiumModel before falling back to DefaultModel
 
-	DefaultNumPredict  int `yaml:"-"`
-	PremiumNumPredict  int `yaml:"-"`
-	FallbackNumPredict int `yaml:"-"`
+	DefaultNumPredict  int `yaml:"-"` // cap on DefaultModel's answer (direct path, not racing anything)
+	PremiumNumPredict  int `yaml:"-"` // cap on PremiumModel's answer (shortens the race itself)
+	FallbackNumPredict int `yaml:"-"` // cap when PremiumModel timed out and we fell back to DefaultModel
 }
 
 type DLPConfig struct {
@@ -38,9 +38,10 @@ type DLPConfig struct {
 }
 
 type RulesConfig struct {
-	Enabled     bool   `yaml:"enabled"`
-	MaxChars    int    `yaml:"max_chars"`
-	FirewallURL string `yaml:"firewall_url"`
+	Enabled         bool   `yaml:"enabled"`
+	MaxChars        int    `yaml:"max_chars"`
+	FirewallURL     string `yaml:"firewall_url"`
+	DecisionLogPath string `yaml:"decision_log_path"`
 }
 
 func Load(path string) (*Config, error) {
@@ -69,8 +70,9 @@ func Load(path string) (*Config, error) {
 			BaseURL: flat["dlp.base_url"],
 		},
 		Rules: RulesConfig{
-			Enabled:     flat["rules.enabled"] == "true",
-			FirewallURL: flat["rules.firewall_url"],
+			Enabled:         flat["rules.enabled"] == "true",
+			FirewallURL:     flat["rules.firewall_url"],
+			DecisionLogPath: flat["rules.decision_log_path"],
 		},
 	}
 
