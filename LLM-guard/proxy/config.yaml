@@ -24,3 +24,4 @@ rules:
   max_chars: 4000
   firewall_url: "http://127.0.0.1:5001"
   decision_log_path: "logs/rules_decisions.jsonl"
+  harden_system_prompt: true

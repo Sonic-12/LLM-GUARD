@@ -38,10 +38,11 @@ type DLPConfig struct {
 }
 
 type RulesConfig struct {
-	Enabled         bool   `yaml:"enabled"`
-	MaxChars        int    `yaml:"max_chars"`
-	FirewallURL     string `yaml:"firewall_url"`
-	DecisionLogPath string `yaml:"decision_log_path"`
+	Enabled             bool   `yaml:"enabled"`
+	MaxChars            int    `yaml:"max_chars"`
+	FirewallURL         string `yaml:"firewall_url"`
+	DecisionLogPath     string `yaml:"decision_log_path"`
+	HardenSystemPrompt  bool   `yaml:"harden_system_prompt"`
 }
 
 func Load(path string) (*Config, error) {
@@ -70,9 +71,10 @@ func Load(path string) (*Config, error) {
 			BaseURL: flat["dlp.base_url"],
 		},
 		Rules: RulesConfig{
-			Enabled:         flat["rules.enabled"] == "true",
-			FirewallURL:     flat["rules.firewall_url"],
-			DecisionLogPath: flat["rules.decision_log_path"],
+			Enabled:            flat["rules.enabled"] == "true",
+			FirewallURL:        flat["rules.firewall_url"],
+			DecisionLogPath:    flat["rules.decision_log_path"],
+			HardenSystemPrompt: flat["rules.harden_system_prompt"] == "true",
 		},
 	}
 

@@ -8,6 +8,7 @@ import (
 
 	"llmguard/proxy/internal/config"
 	"llmguard/proxy/internal/dlp"
+	"llmguard/proxy/internal/hardening"
 	"llmguard/proxy/internal/middleware"
 	"llmguard/proxy/internal/proxy"
 	"llmguard/proxy/internal/rules"
@@ -33,8 +34,10 @@ func main() {
 		BaseURL: cfg.DLP.BaseURL,
 		Enabled: cfg.DLP.Enabled,
 	})
+	hardeningHook := hardening.New(hardening.Config{Enabled: cfg.Rules.HardenSystemPrompt})
 	chain.UsePre(rulesHook)
 	chain.UsePre(dlpHook)
+	chain.UsePre(hardeningHook)
 	chain.UsePre(middleware.Passthrough{})
 	chain.UsePost(middleware.Passthrough{})
 	chain.UsePost(dlpHook)

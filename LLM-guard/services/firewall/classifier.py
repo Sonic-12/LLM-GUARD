@@ -3,8 +3,8 @@ import joblib
 from typing import Tuple
 
 DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(__file__), "artifacts", "jailbreak_model.joblib")
-LOW_THRESHOLD = 0.46
-HIGH_THRESHOLD = 0.65
+LOW_THRESHOLD = 0.44  
+HIGH_THRESHOLD = 0.59 
 
 class JailbreakDetector:
     def __init__(self, model_path: str = DEFAULT_MODEL_PATH):

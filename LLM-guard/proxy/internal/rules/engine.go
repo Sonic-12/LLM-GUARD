@@ -14,16 +14,14 @@ type PipelineDecision struct {
 	ReviewRequired bool    `json:"review_required,omitempty"`
 }
 
-// EvaluatePrompt runs the short-circuit multi-tier defense pipeline:
-// Tier 1: Length bounds (<0.1ms)
-// Tier 2: Signature Regex blocklist (<0.2ms)
-// Tier 3: Python Semantic ML Classifier (~5-15ms), 3-band confidence
 func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallClient) PipelineDecision {
 	if valid, violation := CheckLength(prompt, maxChars); !valid {
 		return PipelineDecision{Allowed: false, StatusCode: 400, Reason: violation.Rule}
 	}
 
-	if valid, violation := CheckBlocklist(prompt); !valid {
+	normalized := NormalizeForDetection(prompt)
+
+	if valid, violation := CheckBlocklist(normalized); !valid {
 		return PipelineDecision{
 			Allowed:    false,
 			StatusCode: 403,
@@ -32,7 +30,7 @@ func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallCl
 	}
 
 	if client != nil {
-		resp, err := client.InspectPrompt(prompt)
+		resp, err := client.InspectPrompt(normalized)
 		if err != nil {
 			// Fail-open on connection failure
 			return PipelineDecision{Allowed: true, StatusCode: 200, Reason: "INSPECTION_BYPASSED_SERVICE_UNAVAILABLE"}
