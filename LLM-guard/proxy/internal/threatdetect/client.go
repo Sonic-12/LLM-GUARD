@@ -28,7 +28,7 @@ func NewFirewallClient(baseURL string) *FirewallClient {
 	return &FirewallClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 80 * time.Millisecond,
+			Timeout: 3000 * time.Millisecond,
 		},
 	}
 }

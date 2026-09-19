@@ -16,7 +16,7 @@ type Config struct {
 	Enabled         bool
 	MaxChars        int
 	FirewallURL     string
-	DecisionLogPath string // empty disables logging
+	DecisionLogPath string 
 }
 
 type BlockedError struct {
@@ -28,9 +28,6 @@ func (e *BlockedError) Error() string {
 	return fmt.Sprintf("blocked by rules engine: status=%d", e.StatusCode)
 }
 
-// decisionLogEntry is one line written to DecisionLogPath per request
-// evaluated by the rules hook - the persistent record needed for audit
-// and for a future human-review dashboard (Week 4).
 type decisionLogEntry struct {
 	Timestamp      string  `json:"timestamp"`
 	RequestID      string  `json:"request_id"`
@@ -58,8 +55,6 @@ func New(cfg Config) *Hook {
 	if cfg.DecisionLogPath != "" {
 		f, err := os.OpenFile(cfg.DecisionLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			// Logging failure must not block the request pipeline - surface
-			// it explicitly instead of silently swallowing (per project rules).
 			fmt.Fprintf(os.Stderr, "rules: could not open decision log %q: %v (decision logging disabled)\n", cfg.DecisionLogPath, err)
 		} else {
 			h.logFile = f
@@ -124,7 +119,7 @@ func (h *Hook) HandleRequest(ctx context.Context, rc *middleware.RequestContext,
 		if !decision.Allowed {
 			payload, err := json.Marshal(decision)
 			if err != nil {
-				payload = []byte(fmt.Sprintf(`{"allowed":false,"reason":%q}`, decision.Reason))
+				payload = fmt.Appendf(nil, `{"allowed":false,"reason":%q}`, decision.Reason)
 			}
 			return nil, &BlockedError{StatusCode: decision.StatusCode, Body: payload}
 		}

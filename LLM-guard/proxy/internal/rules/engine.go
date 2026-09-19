@@ -32,8 +32,7 @@ func EvaluatePrompt(prompt string, maxChars int, client *threatdetect.FirewallCl
 	if client != nil {
 		resp, err := client.InspectPrompt(normalized)
 		if err != nil {
-			// Fail-open on connection failure
-			return PipelineDecision{Allowed: true, StatusCode: 200, Reason: "INSPECTION_BYPASSED_SERVICE_UNAVAILABLE"}
+			return PipelineDecision{Allowed: false, StatusCode: 503, Reason: "INSPECTION_SERVICE_UNAVAILABLE_FAIL_CLOSED"}
 		}
 
 		if !resp.Allowed {
