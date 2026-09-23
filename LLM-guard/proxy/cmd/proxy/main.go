@@ -6,13 +6,25 @@ import (
 	"log"
 	"net/http"
 
+	"os"
+
 	"llmguard/proxy/internal/config"
 	"llmguard/proxy/internal/dlp"
 	"llmguard/proxy/internal/hardening"
 	"llmguard/proxy/internal/middleware"
+	"llmguard/proxy/internal/outputguard"
 	"llmguard/proxy/internal/proxy"
+	"llmguard/proxy/internal/rbac"
 	"llmguard/proxy/internal/rules"
 )
+
+func rbacRoles(in map[string]config.RoleConfig) map[string]rbac.RoleConfig {
+	out := make(map[string]rbac.RoleConfig, len(in))
+	for name, r := range in {
+		out[name] = rbac.RoleConfig{AllowedModels: r.AllowedModels, MaxChars: r.MaxChars}
+	}
+	return out
+}
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to config.yaml")
@@ -35,10 +47,24 @@ func main() {
 		Enabled: cfg.DLP.Enabled,
 	})
 	hardeningHook := hardening.New(hardening.Config{Enabled: cfg.Rules.HardenSystemPrompt})
+	rbacHook := rbac.New(rbac.Config{
+		Enabled:      cfg.RBAC.Enabled,
+		Secret:       os.Getenv(cfg.RBAC.SecretEnv),
+		Roles:        rbacRoles(cfg.RBAC.Roles),
+		DefaultModel: cfg.Upstream.DefaultModel,
+		PremiumModel: cfg.Upstream.PremiumModel,
+	})
+	outputGuardHook := outputguard.New(outputguard.Config{
+		Enabled:     cfg.OutputGuard.Enabled,
+		DLPBaseURL:  cfg.DLP.BaseURL,
+		FlagLogPath: cfg.OutputGuard.FlagLogPath,
+	})
+	chain.UsePre(rbacHook)
 	chain.UsePre(rulesHook)
 	chain.UsePre(dlpHook)
 	chain.UsePre(hardeningHook)
 	chain.UsePre(middleware.Passthrough{})
+	chain.UsePost(outputGuardHook)
 	chain.UsePost(middleware.Passthrough{})
 	chain.UsePost(dlpHook)
 

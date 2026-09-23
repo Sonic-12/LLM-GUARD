@@ -27,7 +27,6 @@ func sign(secret, signingInput string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// NewToken mints a dev HS256 JWT. Used by tests and the gentoken CLI.
 func NewToken(secret, subject, role string, ttl time.Duration) (string, error) {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	claims := Claims{Subject: subject, Role: role, Exp: time.Now().Add(ttl).Unix()}

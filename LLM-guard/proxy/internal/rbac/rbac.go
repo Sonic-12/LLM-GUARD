@@ -10,8 +10,6 @@ import (
 	"llmguard/proxy/internal/middleware"
 )
 
-// RoleConfig is one role's access limits. AllowedModels uses the same two
-// logical tiers the proxy already forwards on: "default" and "premium".
 type RoleConfig struct {
 	AllowedModels map[string]bool
 	MaxChars      int
@@ -19,11 +17,11 @@ type RoleConfig struct {
 
 type Config struct {
 	Enabled bool
-	Secret  string // HMAC secret; if Enabled and empty, the hook fails closed
+	Secret  string
 	Roles   map[string]RoleConfig
 
-	DefaultModel string // cfg.Upstream.DefaultModel — classifies a request into the "default" tier
-	PremiumModel string // cfg.Upstream.PremiumModel — classifies a request into the "premium" tier
+	DefaultModel string
+	PremiumModel string
 }
 
 type BlockedError struct {
@@ -50,12 +48,8 @@ func New(cfg Config) *Hook {
 
 func (h *Hook) Name() string { return "rbac" }
 
-// MetadataAuthHeader is the rc.Metadata key the proxy stores the raw
-// Authorization header under, since pre-hooks only see the request body.
 const MetadataAuthHeader = "auth.header"
 
-// MetadataRole is the rc.Metadata key this hook stores the resolved role
-// under, for later hooks or logging to read.
 const MetadataRole = "rbac.role"
 
 func (h *Hook) HandleRequest(ctx context.Context, rc *middleware.RequestContext, body []byte) ([]byte, error) {
@@ -88,8 +82,7 @@ func (h *Hook) HandleRequest(ctx context.Context, rc *middleware.RequestContext,
 
 	var parsed map[string]any
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		// Mirrors rules.Hook and dlp.Hook: an unparsable body is left for
-		// downstream hooks to reject, not blocked here.
+
 		return body, nil
 	}
 

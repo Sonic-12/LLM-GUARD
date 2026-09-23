@@ -16,6 +16,8 @@ import (
 
 	"llmguard/proxy/internal/config"
 	"llmguard/proxy/internal/middleware"
+	"llmguard/proxy/internal/outputguard"
+	"llmguard/proxy/internal/rbac"
 	"llmguard/proxy/internal/rules"
 )
 
@@ -39,6 +41,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Metadata:  map[string]any{},
 	}
 
+	rc.Metadata[rbac.MetadataAuthHeader] = r.Header.Get("Authorization")
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
@@ -51,11 +55,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	preDuration := time.Since(preStart)
 	if err != nil {
 		log.Printf("[%s] blocked at pre-request: %v", rc.RequestID, err)
-		var blocked *rules.BlockedError
-		if errors.As(err, &blocked) {
+		var rulesBlocked *rules.BlockedError
+		if errors.As(err, &rulesBlocked) {
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(blocked.StatusCode)
-			w.Write(blocked.Body)
+			w.WriteHeader(rulesBlocked.StatusCode)
+			w.Write(rulesBlocked.Body)
+			return
+		}
+		var rbacBlocked *rbac.BlockedError
+		if errors.As(err, &rbacBlocked) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(rbacBlocked.StatusCode)
+			w.Write(rbacBlocked.Body)
 			return
 		}
 		http.Error(w, fmt.Sprintf("request blocked: %v", err), http.StatusForbidden)
@@ -74,6 +85,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	postDuration := time.Since(postStart)
 	if err != nil {
 		log.Printf("[%s] blocked at post-response: %v", rc.RequestID, err)
+		var outputBlocked *outputguard.BlockedError
+		if errors.As(err, &outputBlocked) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(outputBlocked.StatusCode)
+			w.Write(outputBlocked.Body)
+			return
+		}
 		http.Error(w, fmt.Sprintf("response blocked: %v", err), http.StatusForbidden)
 		return
 	}

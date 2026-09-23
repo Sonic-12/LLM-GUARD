@@ -11,10 +11,28 @@ import (
 )
 
 type Config struct {
-	ListenAddr string         `yaml:"listen_addr"`
-	Upstream   UpstreamConfig `yaml:"upstream"`
-	DLP        DLPConfig      `yaml:"dlp"`
-	Rules      RulesConfig    `yaml:"rules"`
+	ListenAddr  string            `yaml:"listen_addr"`
+	Upstream    UpstreamConfig    `yaml:"upstream"`
+	DLP         DLPConfig         `yaml:"dlp"`
+	Rules       RulesConfig       `yaml:"rules"`
+	RBAC        RBACConfig        `yaml:"rbac"`
+	OutputGuard OutputGuardConfig `yaml:"outputguard"`
+}
+
+type RoleConfig struct {
+	AllowedModels map[string]bool
+	MaxChars      int
+}
+
+type RBACConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	SecretEnv string `yaml:"secret_env"`
+	Roles     map[string]RoleConfig
+}
+
+type OutputGuardConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	FlagLogPath string `yaml:"flag_log_path"`
 }
 
 type UpstreamConfig struct {
@@ -38,11 +56,11 @@ type DLPConfig struct {
 }
 
 type RulesConfig struct {
-	Enabled             bool   `yaml:"enabled"`
-	MaxChars            int    `yaml:"max_chars"`
-	FirewallURL         string `yaml:"firewall_url"`
-	DecisionLogPath     string `yaml:"decision_log_path"`
-	HardenSystemPrompt  bool   `yaml:"harden_system_prompt"`
+	Enabled            bool   `yaml:"enabled"`
+	MaxChars           int    `yaml:"max_chars"`
+	FirewallURL        string `yaml:"firewall_url"`
+	DecisionLogPath    string `yaml:"decision_log_path"`
+	HardenSystemPrompt bool   `yaml:"harden_system_prompt"`
 }
 
 func Load(path string) (*Config, error) {
@@ -75,6 +93,15 @@ func Load(path string) (*Config, error) {
 			FirewallURL:        flat["rules.firewall_url"],
 			DecisionLogPath:    flat["rules.decision_log_path"],
 			HardenSystemPrompt: flat["rules.harden_system_prompt"] == "true",
+		},
+		RBAC: RBACConfig{
+			Enabled:   flat["rbac.enabled"] == "true",
+			SecretEnv: flat["rbac.secret_env"],
+			Roles:     map[string]RoleConfig{},
+		},
+		OutputGuard: OutputGuardConfig{
+			Enabled:     flat["outputguard.enabled"] == "true",
+			FlagLogPath: flat["outputguard.flag_log_path"],
 		},
 	}
 
@@ -120,7 +147,57 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	if err := parseRoles(flat, &cfg.RBAC); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+
 	return &cfg, nil
+}
+
+func parseRoles(flat map[string]string, rbac *RBACConfig) error {
+	const prefix = "rbac.role_"
+
+	for key := range flat {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(key, prefix)
+
+		var roleName, field string
+		switch {
+		case strings.HasSuffix(rest, "_models"):
+			roleName = strings.TrimSuffix(rest, "_models")
+			field = "models"
+		case strings.HasSuffix(rest, "_max_chars"):
+			roleName = strings.TrimSuffix(rest, "_max_chars")
+			field = "max_chars"
+		default:
+			return fmt.Errorf("unrecognized rbac role key %q (expected _models or _max_chars suffix)", key)
+		}
+		if roleName == "" {
+			return fmt.Errorf("rbac role key %q has no role name", key)
+		}
+
+		role := rbac.Roles[roleName]
+		switch field {
+		case "models":
+			role.AllowedModels = map[string]bool{}
+			for _, tier := range strings.Split(flat[key], ",") {
+				tier = strings.TrimSpace(tier)
+				if tier != "" {
+					role.AllowedModels[tier] = true
+				}
+			}
+		case "max_chars":
+			n, err := strconv.Atoi(flat[key])
+			if err != nil {
+				return fmt.Errorf("rbac role %q max_chars: %w", roleName, err)
+			}
+			role.MaxChars = n
+		}
+		rbac.Roles[roleName] = role
+	}
+	return nil
 }
 
 func parseYAML(r io.Reader) (map[string]string, error) {

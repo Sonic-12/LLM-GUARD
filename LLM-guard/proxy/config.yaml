@@ -25,3 +25,17 @@ rules:
   firewall_url: "http://127.0.0.1:5001"
   decision_log_path: "logs/rules_decisions.jsonl"
   harden_system_prompt: true
+
+rbac:
+  enabled: true
+  secret_env: "RBAC_JWT_SECRET"   
+  role_admin_models: "default,premium"
+  role_admin_max_chars: "4000"
+  role_employee_models: "default,premium"
+  role_employee_max_chars: "4000"
+  role_guest_models: "default"
+  role_guest_max_chars: "1000"
+
+outputguard:
+  enabled: true
+  flag_log_path: "logs/outputguard_flags.jsonl"
