@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"llmguard/proxy/internal/middleware"
@@ -17,8 +18,13 @@ type RoleConfig struct {
 
 type Config struct {
 	Enabled bool
-	Secret  string
-	Roles   map[string]RoleConfig
+
+	IssuerURL string
+	JWKSURL   string
+
+	ClientID string
+
+	Roles map[string]RoleConfig
 
 	DefaultModel string
 	PremiumModel string
@@ -39,11 +45,15 @@ func blocked(status int, reason string) error {
 }
 
 type Hook struct {
-	cfg Config
+	cfg  Config
+	jwks *jwksCache
 }
 
 func New(cfg Config) *Hook {
-	return &Hook{cfg: cfg}
+	return &Hook{
+		cfg:  cfg,
+		jwks: newJWKSCache(cfg.JWKSURL, 10*time.Second),
+	}
 }
 
 func (h *Hook) Name() string { return "rbac" }
@@ -56,8 +66,8 @@ func (h *Hook) HandleRequest(ctx context.Context, rc *middleware.RequestContext,
 	if !h.cfg.Enabled {
 		return body, nil
 	}
-	if h.cfg.Secret == "" {
-		return nil, blocked(503, "RBAC_MISCONFIGURED_NO_SECRET")
+	if h.cfg.IssuerURL == "" || h.cfg.JWKSURL == "" {
+		return nil, blocked(503, "RBAC_MISCONFIGURED_NO_IDP")
 	}
 
 	const prefix = "Bearer "
@@ -67,18 +77,18 @@ func (h *Hook) HandleRequest(ctx context.Context, rc *middleware.RequestContext,
 	}
 	token := strings.TrimPrefix(header, prefix)
 
-	claims, err := VerifyToken(h.cfg.Secret, token)
+	claims, err := h.jwks.VerifyRS256Token(ctx, token, h.cfg.IssuerURL, h.cfg.ClientID)
 	if err != nil {
-		return nil, blocked(401, "INVALID_TOKEN")
+		return nil, blocked(401, rs256ErrorReason(err))
 	}
 
-	role, ok := h.cfg.Roles[claims.Role]
+	role, roleName, ok := h.resolveRole(claims.RealmAccess.Roles)
 	if !ok {
 		return nil, blocked(403, "UNKNOWN_ROLE")
 	}
 
-	rc.UserID = claims.Subject
-	rc.Metadata[MetadataRole] = claims.Role
+	rc.UserID = firstNonEmpty(claims.PreferredUsername, claims.Subject)
+	rc.Metadata[MetadataRole] = roleName
 
 	var parsed map[string]any
 	if err := json.Unmarshal(body, &parsed); err != nil {
@@ -112,4 +122,35 @@ func (h *Hook) HandleRequest(ctx context.Context, rc *middleware.RequestContext,
 	}
 
 	return body, nil
+}
+
+func (h *Hook) resolveRole(realmRoles []string) (RoleConfig, string, bool) {
+	for _, r := range realmRoles {
+		if cfg, ok := h.cfg.Roles[r]; ok {
+			return cfg, r, true
+		}
+	}
+	return RoleConfig{}, "", false
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func rs256ErrorReason(err error) string {
+	switch err {
+	case ErrRS256Expired:
+		return "TOKEN_EXPIRED"
+	case ErrRS256BadIssuer:
+		return "INVALID_ISSUER"
+	case ErrRS256BadAudience:
+		return "INVALID_CLIENT"
+	default:
+		return "INVALID_TOKEN"
+	}
 }

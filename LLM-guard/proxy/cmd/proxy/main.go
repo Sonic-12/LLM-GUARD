@@ -1,12 +1,9 @@
-// Command proxy starts the LLM-Guard reverse proxy.
 package main
 
 import (
 	"flag"
 	"log"
 	"net/http"
-
-	"os"
 
 	"llmguard/proxy/internal/config"
 	"llmguard/proxy/internal/dlp"
@@ -49,7 +46,9 @@ func main() {
 	hardeningHook := hardening.New(hardening.Config{Enabled: cfg.Rules.HardenSystemPrompt})
 	rbacHook := rbac.New(rbac.Config{
 		Enabled:      cfg.RBAC.Enabled,
-		Secret:       os.Getenv(cfg.RBAC.SecretEnv),
+		IssuerURL:    cfg.RBAC.IssuerURL,
+		JWKSURL:      cfg.RBAC.JWKSURL,
+		ClientID:     cfg.RBAC.ClientID,
 		Roles:        rbacRoles(cfg.RBAC.Roles),
 		DefaultModel: cfg.Upstream.DefaultModel,
 		PremiumModel: cfg.Upstream.PremiumModel,
@@ -59,11 +58,13 @@ func main() {
 		DLPBaseURL:  cfg.DLP.BaseURL,
 		FlagLogPath: cfg.OutputGuard.FlagLogPath,
 	})
+
 	chain.UsePre(rbacHook)
 	chain.UsePre(rulesHook)
 	chain.UsePre(dlpHook)
 	chain.UsePre(hardeningHook)
 	chain.UsePre(middleware.Passthrough{})
+
 	chain.UsePost(outputGuardHook)
 	chain.UsePost(middleware.Passthrough{})
 	chain.UsePost(dlpHook)

@@ -4,7 +4,7 @@ listen_addr: ":8080"
 
 upstream:
   type: llama
-  base_url: "http://localhost:11434
+  base_url: "http://localhost:11434"
   api_key_env: ""
 
   default_model: "llama3.2:3b"     # used for every request unless premium_model is explicitly requested
@@ -28,7 +28,9 @@ rules:
 
 rbac:
   enabled: true
-  secret_env: "RBAC_JWT_SECRET"   
+  issuer_url: "http://localhost:8081/realms/llmguard"
+  jwks_url: "http://localhost:8081/realms/llmguard/protocol/openid-connect/certs"
+  client_id: "llmguard-proxy"
   role_admin_models: "default,premium"
   role_admin_max_chars: "4000"
   role_employee_models: "default,premium"

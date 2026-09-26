@@ -26,7 +26,9 @@ type RoleConfig struct {
 
 type RBACConfig struct {
 	Enabled   bool   `yaml:"enabled"`
-	SecretEnv string `yaml:"secret_env"`
+	IssuerURL string `yaml:"issuer_url"`
+	JWKSURL   string `yaml:"jwks_url"`
+	ClientID  string `yaml:"client_id"`
 	Roles     map[string]RoleConfig
 }
 
@@ -41,12 +43,12 @@ type UpstreamConfig struct {
 	APIKeyEnv string `yaml:"api_key_env"`
 
 	DefaultModel string `yaml:"default_model"` // used for every request unless PremiumModel is explicitly requested
-	PremiumModel string `yaml:"premium_model"` // opt-in only; used only when client requests this exact model name
+	PremiumModel string `yaml:"premium_model"` // opt-in only, used only when client requests this exact model name
 
 	PremiumTimeout time.Duration `yaml:"-"` // how long we wait on PremiumModel before falling back to DefaultModel
 
-	DefaultNumPredict  int `yaml:"-"` // cap on DefaultModel's answer (direct path, not racing anything)
-	PremiumNumPredict  int `yaml:"-"` // cap on PremiumModel's answer (shortens the race itself)
+	DefaultNumPredict  int `yaml:"-"` // cap on DefaultModel answer (direct path, not racing anything)
+	PremiumNumPredict  int `yaml:"-"` // cap on PremiumModel answer (shortens the race itself)
 	FallbackNumPredict int `yaml:"-"` // cap when PremiumModel timed out and we fell back to DefaultModel
 }
 
@@ -96,7 +98,9 @@ func Load(path string) (*Config, error) {
 		},
 		RBAC: RBACConfig{
 			Enabled:   flat["rbac.enabled"] == "true",
-			SecretEnv: flat["rbac.secret_env"],
+			IssuerURL: flat["rbac.issuer_url"],
+			JWKSURL:   flat["rbac.jwks_url"],
+			ClientID:  flat["rbac.client_id"],
 			Roles:     map[string]RoleConfig{},
 		},
 		OutputGuard: OutputGuardConfig{

@@ -4,3 +4,4 @@ venv/
 .venv/
 bin/
 rules_decisions.jsonl
+outputguard_flags.jsonl
