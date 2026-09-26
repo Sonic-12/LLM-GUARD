@@ -1,0 +1,1 @@
+{"model":"llama3.2:3b","messages":[{"role":"user","content":"hello"}],"test_response_override":"Sure, here is an API key: sk-abcd1234efgh5678ijkl"}
