@@ -1,11 +1,13 @@
 # LLM-Guard — Setup & Run Procedure
+
 ## 1. Prerequisites — What to Install
 
 | Tool | Purpose | Where to get it |
 |---|---|---|
 | **Go** (1.21+) | Runs the reverse proxy | https://go.dev/dl/ |
-| **Python** (3.10+) | Runs the DLP service | https://www.python.org/downloads/ |
+| **Python** (3.10+) | Runs the DLP service and firewall/classifier service | https://www.python.org/downloads/ |
 | **Ollama** | Serves the local LLM | https://ollama.com/download |
+| **Docker Desktop** | Runs Keycloak (the Identity Provider) | https://www.docker.com/products/docker-desktop/ |
 | **Git** (if not already installed) | To pull/push the repo | https://git-scm.com/downloads |
 
 After installing Ollama, pull the models this project uses:
@@ -24,7 +26,7 @@ cd D:\project\LLM-GUARD\LLM-guard\proxy
 go mod download
 ```
 
-**B — Python environment** (from the `dlp-service` folder):
+**B — Python environment for the DLP service** (from the `dlp-service` folder):
 ```powershell
 cd D:\project\LLM-GUARD\LLM-guard\dlp-service
 python -m venv .venv
@@ -35,13 +37,47 @@ python -m spacy download en_core_web_md
 The `spacy download` step is required separately — it's the NLP model
 the DLP service uses and isn't installed automatically by `pip install`.
 
+**C — Python environment for the firewall/classifier service** (from the repo root):
+```powershell
+cd D:\project\LLM-GUARD\LLM-guard
+python -m venv services\firewall\.venv
+.\services\firewall\.venv\Scripts\activate
+pip install -r services\firewall\requirements.txt
+```
+
+**D — Keycloak (Identity Provider) — one-time container + realm setup**
+
+1. Run the container:
+   ```powershell
+   docker run -d --name keycloak -p 8081:8080 -e KEYCLOAK_ADMIN=admin -e KEYCLOAK_ADMIN_PASSWORD=admin123 quay.io/keycloak/keycloak:latest start-dev
+   ```
+2. Open http://localhost:8081 → **Administration Console** → log in `admin` / `admin123`.
+3. Top-left dropdown → **Create Realm** → name it `llmguard` → Create.
+4. **Realm roles** → **Create role** → create `admin`, `employee`, `guest` (one at a time).
+5. **Clients** → **Create client** → Client ID `llmguard-proxy` → Next → turn ON **Client authentication** → Next → turn ON **Direct access grants** → Save.
+6. **Clients → llmguard-proxy → Credentials** tab → copy the **Client secret**. You'll need it every time you fetch a token (Section 5).
+7. **Users** → **Add user** → repeat for `admin-user`, `employee-user`, `guest-user`:
+   - Set username → Create.
+   - **Details** tab → fill in Email/First name/Last name (avoids a Keycloak "account not fully set up" error) → Save.
+   - **Credentials** tab → Set password (e.g. `Pass123`) → **Temporary: OFF** → Save.
+   - **Role mapping** tab → Assign role → pick the matching role (`admin`/`employee`/`guest`).
+
+This is one-time setup — the container and its realm persist across restarts as long as you don't delete the container.
+
 ---
 
 ## 3. Starting the Project (Every Time)
 
-Three terminals, in this order:
+Five terminals, in this order:
 
-**Terminal 1 — Ollama** (if not already running as a background service):
+**Terminal 0 — Keycloak** (only if the container isn't already running):
+```powershell
+docker start keycloak
+docker ps
+```
+Confirm it shows as `Up`, then check http://localhost:8081 loads. If you never stop the container, you can skip this step entirely.
+
+**Terminal 1 — Ollama** (skip if already running as a background service):
 ```powershell
 ollama serve
 ```
@@ -52,76 +88,109 @@ cd D:\project\LLM-GUARD\LLM-guard\dlp-service
 .venv\Scripts\activate
 uvicorn app:app --reload --port 9100
 ```
-(Binds to `127.0.0.1` by default — matches `config.yaml`'s
-`dlp.base_url: http://127.0.0.1:9100`, so no extra `--host` flag needed.)
+(Binds to `127.0.0.1` by default — matches `config.yaml`'s `dlp.base_url: http://127.0.0.1:9100`.)
 
-**Terminal 3 — Proxy:**
+**Terminal 3 — Firewall service (jailbreak classifier):**
+```powershell
+cd D:\project\LLM-GUARD\LLM-guard
+.\services\firewall\.venv\Scripts\activate
+uvicorn services.firewall.app:app --host 127.0.0.1 --port 5001
+```
+Expected: `Application startup complete.`
+
+**Terminal 4 — Proxy:**
 ```powershell
 cd D:\project\LLM-GUARD\LLM-guard\proxy
 go run ./cmd/proxy
 ```
+Expected: `LLM-Guard proxy listening on :8080 -> upstream[llama] http://localhost:11434`
 
-**Confirm it's up:**
+**Confirm everything's up:**
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:9100/health" -Method Get
 ```
-Should return a healthy status. The proxy terminal should show:
-```
-LLM-Guard proxy listening on :8080 -> upstream[llama] http://localhost:11434
-```
+Should return a healthy status.
 
 ---
 
 ## 4. Configuration
 
-Located at `proxy/config.yaml`. Key setting to know:
+Located at `proxy/config.yaml`. Key settings to know:
 
 | Setting | Purpose |
 |---|---|
 | `dlp.enabled` | `true` = DLP redaction active; `false` = proxy passes requests through untouched |
 | `dlp.base_url` | Where the proxy reaches the DLP service — should stay `http://127.0.0.1:9100` |
+| `rules.enabled` | `true` = firewall/jailbreak checks active |
+| `rules.firewall_url` | Where the proxy reaches the firewall service — should stay `http://127.0.0.1:5001` |
+| `rbac.enabled` | `true` = every request requires a valid Keycloak token |
+| `rbac.issuer_url` | Your Keycloak realm's issuer, e.g. `http://localhost:8081/realms/llmguard` |
+| `rbac.jwks_url` | Keycloak's public-key endpoint for that realm |
+| `rbac.client_id` | Must match the client ID created in Section 2D (`llmguard-proxy`) |
+| `outputguard.enabled` | `true` = the AI's replies are checked for toxicity/leaks/hallucination signals |
+| `outputguard.test_mode` | **Must stay `false`.** Dev-only bypass used during Week 3 testing; leave off. |
+
+**Important:** with `rbac.enabled: true`, every request needs a bearer token (Section 5). If you want to test something without RBAC in the way (e.g. an old script that doesn't send a token), temporarily set `rbac.enabled: false`, restart the proxy, test, then set it back to `true`.
 
 ---
 
-## 5. Quick Test
+## 5. Getting a Token (Required for Every Request Now)
 
-Send one request through the full stack:
+Since RBAC is enabled, every request to the proxy needs a bearer token from Keycloak. Fetch one per role as needed:
+
+```powershell
+cd D:\project\LLM-GUARD\LLM-guard\proxy
+
+$adminToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=YOUR_CLIENT_SECRET" -d "grant_type=password" -d "username=admin-user" -d "password=Pass123" | ConvertFrom-Json).access_token
+
+$employeeToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=YOUR_CLIENT_SECRET" -d "grant_type=password" -d "username=employee-user" -d "password=Pass123" | ConvertFrom-Json).access_token
+
+$guestToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=YOUR_CLIENT_SECRET" -d "grant_type=password" -d "username=guest-user" -d "password=Pass123" | ConvertFrom-Json).access_token
+```
+Replace `YOUR_CLIENT_SECRET` with the value from Section 2D, step 6.
+
+**Tokens expire after 5 minutes** — if a request suddenly starts returning `401 TOKEN_EXPIRED`, just re-run the relevant line above.
+
+---
+
+## 6. Quick Test
+
+Send one request through the full stack (using the admin token from Section 5):
 ```powershell
 $body = @{
     model    = "llama3.2:3b"
     messages = @(@{ role = "user"; content = "Say hello in one short sentence." })
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/v1/chat/completions" -Method Post -Body $body -ContentType "application/json"
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/v1/chat/completions" -Method Post -Body $body -ContentType "application/json" -Headers @{ Authorization = "Bearer $adminToken" }
 ```
-A normal AI response back confirms the full pipeline (proxy → DLP → AI
-model → back) is working end to end.
+A normal AI response back confirms the full pipeline (proxy → RBAC → rules/firewall → DLP → AI model → output validation → back) is working end to end.
 
 ---
-## 6. Running Automated Tests
 
-**DLP Redaction Test**
-```powershell
-# tests/test_redact.ps1 — DLP redaction test
-$body = @{
-    text = "My email is testuser@gmail.com, SSN is 402-15-3847, card is 4242 4242 4242 4242, key is sk-abcdefghijklmnopqrstuvwx1234"
-} | ConvertTo-Json
+## 7. Running Automated Tests
 
-$response = Invoke-RestMethod -Uri "http://localhost:9100/redact" -Method Post -Body $body -ContentType "application/json"
-
-Write-Host "Redacted: " $response.redacted_text
-```
-
-**Go Integration Tests**
+**Full Go test suite** (all packages, no external services required):
 ```powershell
 cd D:\project\LLM-GUARD\LLM-guard\proxy
-go test ./internal/dlp/... -v
+go build ./... ; go vet ./... ; go test ./... -v
 ```
-Should show 5 tests passing. No need to have any of the 3 services above
-running for this — it's fully self-contained.
+Should show all packages `ok`, no `FAIL`. As of the last verified run, this is **41 tests total** across `dlp`, `hardening`, `outputguard`, `rbac`, and `rules`. Fully self-contained — none of the other services (Ollama, DLP, firewall, Keycloak) need to be running for this.
+
+**Manual live checks** (RBAC + Output Validation, against the real running stack): see the fixture files in `proxy/testdata/manual/` — `default.json`, `premium.json`, `longprompt.json`, `hallucination_test.json`. Example:
+```powershell
+curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $guestToken" -d "@testdata\manual\premium.json"
+```
+Expect `403 MODEL_NOT_ALLOWED_FOR_ROLE` for this one (guest requesting the premium model).
 
 ---
 
-## 7. Shutting Down
+## 8. Shutting Down
 
-`Ctrl+C` in each of the three terminals, in any order.
+`Ctrl+C` in each of the four foreground terminals (Ollama, DLP, firewall, proxy), in any order.
+
+Keycloak keeps running in the background as a Docker container even after you close its terminal. To actually stop it:
+```powershell
+docker stop keycloak
+```
+(Use `docker start keycloak` next time, per Section 3, Terminal 0 — no need to redo the realm/client/user setup, it persists in the container.)
