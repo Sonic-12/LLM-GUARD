@@ -2,15 +2,19 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Sonic-12/LLM-GUARD/pkg/client"
 	"github.com/Sonic-12/LLM-GUARD/pkg/rules"
+	"github.com/Sonic-12/LLM-GUARD/pkg/telemetry"
 )
 
 type ChatMessage struct {
@@ -30,6 +34,12 @@ type ErrorResponse struct {
 		Type    string `json:"type"`
 		Code    int    `json:"code"`
 	} `json:"error"`
+}
+
+func generateEventID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return "evt-" + hex.EncodeToString(b)
 }
 
 func writeJSONError(w http.ResponseWriter, statusCode int, message, errType string) {
@@ -52,7 +62,7 @@ func main() {
 
 	upstreamURL := os.Getenv("UPSTREAM_LLM_URL")
 	if upstreamURL == "" {
-		upstreamURL = "http://127.0.0.1:11434" // Default local LLM fallback (e.g. Ollama)
+		upstreamURL = "http://127.0.0.1:11434"
 	}
 
 	firewallURL := os.Getenv("FIREWALL_SERVICE_URL")
@@ -61,6 +71,7 @@ func main() {
 	}
 
 	firewallClient := client.NewFirewallClient(firewallURL)
+	siemLogger := telemetry.NewSIEMLogger(os.Stdout)
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -72,6 +83,13 @@ func main() {
 			writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed", "invalid_request_error")
 			return
 		}
+
+		userID := r.Header.Get("X-User-ID")
+		if userID == "" {
+			userID = "anonymous"
+		}
+
+		clientIP := r.RemoteAddr
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -85,7 +103,6 @@ func main() {
 			return
 		}
 
-		// Extract user prompt and system prompt
 		var systemPrompt string
 		var userPrompt string
 		var userMsgIndex = -1
@@ -104,15 +121,33 @@ func main() {
 			return
 		}
 
-		// 1. Run Guardrail Evaluation (Tiers 1-3)
+		eventID := generateEventID()
+
+		// 1. Run Guardrail Evaluation
 		decision := rules.EvaluatePrompt(userPrompt, 4000, firewallClient)
+
+		// Create telemetry event
+		auditEvent := telemetry.AuditEvent{
+			Timestamp:      time.Now().UTC().Format(time.RFC3339),
+			EventID:        eventID,
+			UserID:         userID,
+			ClientIP:       clientIP,
+			PromptLength:   len(userPrompt),
+			Allowed:        decision.Allowed,
+			StatusCode:     decision.StatusCode,
+			Reason:         decision.Reason,
+			JailbreakScore: decision.JailbreakScore,
+			PromptSample:   userPrompt,
+		}
+
+		_ = siemLogger.LogEvent(auditEvent)
+
 		if !decision.Allowed {
-			log.Printf("[BLOCK] Rejected prompt. Reason: %s | Score: %.2f", decision.Reason, decision.JailbreakScore)
 			writeJSONError(w, decision.StatusCode, "Request blocked by LLM-GUARD: "+decision.Reason, "security_violation")
 			return
 		}
 
-		// 2. Delimiter Sandboxing & System Enforcer (Tier 2 encapsulation)
+		// 2. Delimiter Sandboxing & System Enforcer
 		chatReq.Messages[userMsgIndex].Content = rules.EnforceSystemInstructions(systemPrompt, userPrompt)
 
 		// 3. Forward to Upstream LLM
