@@ -19,12 +19,14 @@ import (
 	"llmguard/proxy/internal/outputguard"
 	"llmguard/proxy/internal/rbac"
 	"llmguard/proxy/internal/rules"
+	"llmguard/proxy/internal/telemetry"
 )
 
 type Server struct {
-	cfg   *config.Config
-	chain *middleware.Chain
-	http  *http.Client
+	cfg       *config.Config
+	chain     *middleware.Chain
+	http      *http.Client
+	telemetry *telemetry.Logger
 }
 
 func New(cfg *config.Config, chain *middleware.Chain) *Server {
@@ -32,6 +34,11 @@ func New(cfg *config.Config, chain *middleware.Chain) *Server {
 		cfg:   cfg,
 		chain: chain,
 		http:  &http.Client{Timeout: 90 * time.Second},
+		telemetry: telemetry.New(telemetry.Config{
+			Enabled:      cfg.Telemetry.Enabled,
+			LocalLogPath: cfg.Telemetry.LocalLogPath,
+			SidecarURL:   cfg.Telemetry.SidecarURL,
+		}),
 	}
 }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -43,12 +50,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	rc.Metadata[rbac.MetadataAuthHeader] = r.Header.Get("Authorization")
 
-	body, err := io.ReadAll(r.Body)
+	originalBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
+	body := originalBody
 
 	preStart := time.Now()
 	body, err = s.chain.RunPre(r.Context(), rc, body)
@@ -57,6 +65,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] blocked at pre-request: %v", rc.RequestID, err)
 		var rulesBlocked *rules.BlockedError
 		if errors.As(err, &rulesBlocked) {
+			s.logBlocked(rc, r, "rules", rulesBlocked.StatusCode, rulesBlocked.Body, originalBody)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(rulesBlocked.StatusCode)
 			w.Write(rulesBlocked.Body)
@@ -64,20 +73,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		var rbacBlocked *rbac.BlockedError
 		if errors.As(err, &rbacBlocked) {
+			s.logBlocked(rc, r, "rbac", rbacBlocked.StatusCode, rbacBlocked.Body, originalBody)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(rbacBlocked.StatusCode)
 			w.Write(rbacBlocked.Body)
 			return
 		}
+		s.logBlocked(rc, r, "pre_hook_unknown", http.StatusForbidden, nil, originalBody)
 		http.Error(w, fmt.Sprintf("request blocked: %v", err), http.StatusForbidden)
 		return
 	}
 
-	respBody, status, err := s.forward(r, rc.RequestID, body)
-	if err != nil {
-		log.Printf("[%s] upstream error: %v", rc.RequestID, err)
-		http.Error(w, "upstream LLM request failed", http.StatusBadGateway)
-		return
+	var respBody []byte
+	var status int
+	if override, ok := testResponseOverride(body); s.cfg.OutputGuard.TestMode && ok {
+
+		log.Printf("[%s] TEST MODE: bypassing upstream LLM call with supplied override text", rc.RequestID)
+		respBody = syntheticChatResponse(override)
+		status = http.StatusOK
+	} else {
+		respBody, status, err = s.forward(r, rc.RequestID, body)
+		if err != nil {
+			log.Printf("[%s] upstream error: %v", rc.RequestID, err)
+			http.Error(w, "upstream LLM request failed", http.StatusBadGateway)
+			return
+		}
 	}
 
 	postStart := time.Now()
@@ -87,11 +107,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] blocked at post-response: %v", rc.RequestID, err)
 		var outputBlocked *outputguard.BlockedError
 		if errors.As(err, &outputBlocked) {
+			s.logBlocked(rc, r, "outputguard", outputBlocked.StatusCode, outputBlocked.Body, originalBody)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(outputBlocked.StatusCode)
 			w.Write(outputBlocked.Body)
 			return
 		}
+		s.logBlocked(rc, r, "post_hook_unknown", http.StatusForbidden, nil, originalBody)
 		http.Error(w, fmt.Sprintf("response blocked: %v", err), http.StatusForbidden)
 		return
 	}
@@ -176,6 +198,84 @@ func (s *Server) doForward(ctx context.Context, method, target string, body []by
 	}
 
 	return respBody, resp.StatusCode, nil
+}
+
+func testResponseOverride(body []byte) (string, bool) {
+	var m struct {
+		Override string `json:"test_response_override"`
+	}
+	if err := json.Unmarshal(body, &m); err != nil || m.Override == "" {
+		return "", false
+	}
+	return m.Override, true
+}
+
+func syntheticChatResponse(content string) []byte {
+	resp := map[string]any{
+		"id":     "chatcmpl-testmode",
+		"object": "chat.completion",
+		"model":  "test-mode-override",
+		"choices": []map[string]any{
+			{
+				"index":         0,
+				"message":       map[string]any{"role": "assistant", "content": content},
+				"finish_reason": "stop",
+			},
+		},
+	}
+	out, _ := json.Marshal(resp) // fields above are fixed/valid; Marshal cannot fail here
+	return out
+}
+
+func (s *Server) logBlocked(rc *middleware.RequestContext, r *http.Request, source string, statusCode int, blockedBody []byte, originalBody []byte) {
+	reason, jailbreakScore := parseBlockedBody(blockedBody)
+	promptSample, promptLength := extractUserPromptText(originalBody)
+
+	s.telemetry.LogBlocked(telemetry.AuditEvent{
+		EventID:        telemetry.NewEventID(),
+		UserID:         rc.UserID,
+		ClientIP:       r.RemoteAddr,
+		Source:         source,
+		PromptLength:   promptLength,
+		Allowed:        false,
+		StatusCode:     statusCode,
+		Reason:         reason,
+		RuleTriggered:  reason, 
+		JailbreakScore: jailbreakScore,
+		PromptSample:   promptSample,
+	})
+}
+
+func parseBlockedBody(body []byte) (reason string, jailbreakScore float64) {
+	if len(body) == 0 {
+		return "", 0
+	}
+	var m struct {
+		Reason         string  `json:"reason"`
+		JailbreakScore float64 `json:"jailbreak_score"`
+	}
+	if err := json.Unmarshal(body, &m); err != nil {
+		return "", 0
+	}
+	return m.Reason, m.JailbreakScore
+}
+
+func extractUserPromptText(body []byte) (text string, length int) {
+	var parsed struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", 0
+	}
+	for _, msg := range parsed.Messages {
+		if msg.Role == "user" {
+			text = msg.Content
+		}
+	}
+	return text, len(text)
 }
 
 func extractModel(body []byte) (string, error) {

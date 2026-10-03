@@ -5,7 +5,7 @@
 | Tool | Purpose | Where to get it |
 |---|---|---|
 | **Go** (1.21+) | Runs the reverse proxy | https://go.dev/dl/ |
-| **Python** (3.10+) | Runs the DLP service and firewall/classifier service | https://www.python.org/downloads/ |
+| **Python** (3.10+) | Runs the DLP, firewall, and analytics sidecar services | https://www.python.org/downloads/ |
 | **Ollama** | Serves the local LLM | https://ollama.com/download |
 | **Docker Desktop** | Runs Keycloak (the Identity Provider) | https://www.docker.com/products/docker-desktop/ |
 | **Git** (if not already installed) | To pull/push the repo | https://git-scm.com/downloads |
@@ -64,11 +64,19 @@ pip install -r services\firewall\requirements.txt
 
 This is one-time setup — the container and its realm persist across restarts as long as you don't delete the container.
 
+**E — Python environment for the analytics sidecar (Week 4)** (from the repo root):
+```powershell
+cd D:\project\LLM-GUARD\LLM-guard
+python -m venv sidecar\analytics\.venv
+.\sidecar\analytics\.venv\Scripts\activate
+pip install -r sidecar\analytics\requirements.txt
+```
+
 ---
 
 ## 3. Starting the Project (Every Time)
 
-Five terminals, in this order:
+Six terminals, in this order:
 
 **Terminal 0 — Keycloak** (only if the container isn't already running):
 ```powershell
@@ -98,7 +106,16 @@ uvicorn services.firewall.app:app --host 127.0.0.1 --port 5001
 ```
 Expected: `Application startup complete.`
 
-**Terminal 4 — Proxy:**
+**Terminal 4 — Analytics sidecar (Week 4):**
+```powershell
+cd D:\project\LLM-GUARD\LLM-guard
+.\sidecar\analytics\.venv\Scripts\activate
+cd sidecar\analytics
+uvicorn app:app --port 9200
+```
+Expected: `Application startup complete.`
+
+**Terminal 5 — Proxy:**
 ```powershell
 cd D:\project\LLM-GUARD\LLM-guard\proxy
 go run ./cmd/proxy
@@ -108,8 +125,11 @@ Expected: `LLM-Guard proxy listening on :8080 -> upstream[llama] http://localhos
 **Confirm everything's up:**
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:9100/health" -Method Get
+Invoke-RestMethod -Uri "http://127.0.0.1:9200/api/v1/telemetry/metrics" -Method Get
 ```
-Should return a healthy status.
+Both should return without error.
+
+**Dashboard (Week 4):** open `sidecar\analytics\dashboard.html` directly in your browser — no server needed for the page itself, it talks to the sidecar at `127.0.0.1:9200` automatically.
 
 ---
 
@@ -129,6 +149,9 @@ Located at `proxy/config.yaml`. Key settings to know:
 | `rbac.client_id` | Must match the client ID created in Section 2D (`llmguard-proxy`) |
 | `outputguard.enabled` | `true` = the AI's replies are checked for toxicity/leaks/hallucination signals |
 | `outputguard.test_mode` | **Must stay `false`.** Dev-only bypass used during Week 3 testing; leave off. |
+| `telemetry.enabled` | `true` = every blocked request is logged (Week 4) |
+| `telemetry.local_log_path` | Local JSONL audit log — should stay `logs/telemetry_events.jsonl` |
+| `telemetry.sidecar_url` | Where the proxy forwards events for the dashboard — should stay `http://127.0.0.1:9200`. Leave empty to log locally only, with no forwarding. |
 
 **Important:** with `rbac.enabled: true`, every request needs a bearer token (Section 5). If you want to test something without RBAC in the way (e.g. an old script that doesn't send a token), temporarily set `rbac.enabled: false`, restart the proxy, test, then set it back to `true`.
 
@@ -175,7 +198,14 @@ A normal AI response back confirms the full pipeline (proxy → RBAC → rules/f
 cd D:\project\LLM-GUARD\LLM-guard\proxy
 go build ./... ; go vet ./... ; go test ./... -v
 ```
-Should show all packages `ok`, no `FAIL`. As of the last verified run, this is **41 tests total** across `dlp`, `hardening`, `outputguard`, `rbac`, and `rules`. Fully self-contained — none of the other services (Ollama, DLP, firewall, Keycloak) need to be running for this.
+Should show all packages `ok`, no `FAIL`. As of the last verified run, this is **6 packages**: `dlp`, `hardening`, `outputguard`, `rbac`, `rules`, and `telemetry` (new in Week 4). Fully self-contained — none of the other services (Ollama, DLP, firewall, Keycloak, sidecar) need to be running for this.
+
+**Analytics sidecar test suite** (also self-contained, no proxy/services needed):
+```powershell
+cd D:\project\LLM-GUARD\LLM-guard\sidecar\analytics
+pytest test_analytics.py -v
+```
+Should show **3/3 passing**.
 
 **Manual live checks** (RBAC + Output Validation, against the real running stack): see the fixture files in `proxy/testdata/manual/` — `default.json`, `premium.json`, `longprompt.json`, `hallucination_test.json`. Example:
 ```powershell
@@ -183,11 +213,18 @@ curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: 
 ```
 Expect `403 MODEL_NOT_ALLOWED_FOR_ROLE` for this one (guest requesting the premium model).
 
+**Telemetry + dashboard check (Week 4):** after triggering any block above, confirm it was logged two ways:
+```powershell
+Get-Content logs\telemetry_events.jsonl -Tail 3
+curl.exe -s "http://127.0.0.1:9200/api/v1/telemetry/events?limit=5"
+```
+Both should show the event, with a `source` field of `rbac`, `rules`, or `outputguard` depending on which hook blocked it. Then open `dashboard.html` and confirm the same event appears in the table, and the stat cards reflect it.
+
 ---
 
 ## 8. Shutting Down
 
-`Ctrl+C` in each of the four foreground terminals (Ollama, DLP, firewall, proxy), in any order.
+`Ctrl+C` in each of the five foreground terminals (Ollama, DLP, firewall, sidecar, proxy), in any order.
 
 Keycloak keeps running in the background as a Docker container even after you close its terminal. To actually stop it:
 ```powershell

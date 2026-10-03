@@ -17,6 +17,7 @@ type Config struct {
 	Rules       RulesConfig       `yaml:"rules"`
 	RBAC        RBACConfig        `yaml:"rbac"`
 	OutputGuard OutputGuardConfig `yaml:"outputguard"`
+	Telemetry   TelemetryConfig   `yaml:"telemetry"`
 }
 
 type RoleConfig struct {
@@ -32,9 +33,17 @@ type RBACConfig struct {
 	Roles     map[string]RoleConfig
 }
 
+type TelemetryConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	LocalLogPath string `yaml:"local_log_path"`
+	SidecarURL   string `yaml:"sidecar_url"`
+}
+
 type OutputGuardConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	FlagLogPath string `yaml:"flag_log_path"`
+
+	TestMode bool `yaml:"test_mode"`
 }
 
 type UpstreamConfig struct {
@@ -43,12 +52,12 @@ type UpstreamConfig struct {
 	APIKeyEnv string `yaml:"api_key_env"`
 
 	DefaultModel string `yaml:"default_model"` // used for every request unless PremiumModel is explicitly requested
-	PremiumModel string `yaml:"premium_model"` // opt-in only, used only when client requests this exact model name
+	PremiumModel string `yaml:"premium_model"` // opt-in only; used only when client requests this exact model name
 
 	PremiumTimeout time.Duration `yaml:"-"` // how long we wait on PremiumModel before falling back to DefaultModel
 
-	DefaultNumPredict  int `yaml:"-"` // cap on DefaultModel answer (direct path, not racing anything)
-	PremiumNumPredict  int `yaml:"-"` // cap on PremiumModel answer (shortens the race itself)
+	DefaultNumPredict  int `yaml:"-"` // cap on DefaultModel's answer (direct path, not racing anything)
+	PremiumNumPredict  int `yaml:"-"` // cap on PremiumModel's answer (shortens the race itself)
 	FallbackNumPredict int `yaml:"-"` // cap when PremiumModel timed out and we fell back to DefaultModel
 }
 
@@ -106,6 +115,12 @@ func Load(path string) (*Config, error) {
 		OutputGuard: OutputGuardConfig{
 			Enabled:     flat["outputguard.enabled"] == "true",
 			FlagLogPath: flat["outputguard.flag_log_path"],
+			TestMode:    flat["outputguard.test_mode"] == "true",
+		},
+		Telemetry: TelemetryConfig{
+			Enabled:      flat["telemetry.enabled"] == "true",
+			LocalLogPath: flat["telemetry.local_log_path"],
+			SidecarURL:   flat["telemetry.sidecar_url"],
 		},
 	}
 

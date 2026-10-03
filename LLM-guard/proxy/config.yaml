@@ -41,3 +41,9 @@ rbac:
 outputguard:
   enabled: true
   flag_log_path: "logs/outputguard_flags.jsonl"
+  test_mode: false
+
+telemetry:
+  enabled: true
+  local_log_path: "logs/telemetry_events.jsonl"
+  sidecar_url: "http://127.0.0.1:9200"

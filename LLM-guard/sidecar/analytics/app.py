@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 DB_PATH = os.getenv("AUDIT_DB_PATH", "audit_logs.db")
 
@@ -13,7 +13,7 @@ app = FastAPI(title="LLM-GUARD SIEM & Analytics API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False, 
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -28,6 +28,7 @@ def init_db():
             event_id TEXT UNIQUE NOT NULL,
             user_id TEXT NOT NULL,
             client_ip TEXT NOT NULL,
+            source TEXT,
             prompt_length INTEGER NOT NULL,
             allowed BOOLEAN NOT NULL,
             status_code INTEGER NOT NULL,
@@ -37,6 +38,11 @@ def init_db():
             prompt_sample TEXT
         )
     """)
+    try:
+        cursor.execute("ALTER TABLE audit_events ADD COLUMN source TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists
     conn.commit()
     conn.close()
 
@@ -47,26 +53,27 @@ class AuditEventSchema(BaseModel):
     event_id: str
     user_id: str
     client_ip: str
+    source: Optional[str] = None  
     prompt_length: int
     allowed: bool
     status_code: int
     reason: Optional[str] = None
     rule_triggered: Optional[str] = None
-    jailbreak_score: float
+    jailbreak_score: Optional[float] = 0.0
     prompt_sample: str
 
 @app.post("/api/v1/telemetry/ingest")
 def ingest_event(event: AuditEventSchema):
-    ts = event.timestamp or datetime.utcnow().isoformat() + "Z"
+    ts = event.timestamp or datetime.now(timezone.utc).isoformat()
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO audit_events 
-            (timestamp, event_id, user_id, client_ip, prompt_length, allowed, status_code, reason, rule_triggered, jailbreak_score, prompt_sample)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (timestamp, event_id, user_id, client_ip, source, prompt_length, allowed, status_code, reason, rule_triggered, jailbreak_score, prompt_sample)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            ts, event.event_id, event.user_id, event.client_ip,
+            ts, event.event_id, event.user_id, event.client_ip, event.source,
             event.prompt_length, event.allowed, event.status_code,
             event.reason, event.rule_triggered, event.jailbreak_score,
             event.prompt_sample
@@ -106,7 +113,12 @@ def query_events(
     rows = cursor.fetchall()
     conn.close()
 
-    return [dict(row) for row in rows]
+    results = []
+    for row in rows:
+        r = dict(row)
+        r["allowed"] = bool(r["allowed"])
+        results.append(r)
+    return results
 
 @app.get("/api/v1/telemetry/metrics")
 def get_metrics():

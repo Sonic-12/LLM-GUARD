@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM-Guard — Review Console</title>
+<style>
+  :root {
+    --bg: #0B0E14;
+    --panel: #121722;
+    --border: #1F2733;
+    --text: #E8EDF4;
+    --text-muted: #8694A6;
+    --blocked: #E2574C;
+    --blocked-bg: rgba(226, 87, 76, 0.12);
+    --allowed: #3FA66E;
+    --allowed-bg: rgba(63, 166, 110, 0.12);
+    --focus: #5B8DEF;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  a { color: var(--focus); }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+
+  header.topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  h1 span {
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 10px;
+    font-size: 14px;
+  }
+
+  .conn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .conn-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .conn-dot.ok { background: var(--allowed); }
+  .conn-dot.down { background: var(--blocked); }
+
+  input[type="text"], select {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-family: var(--sans);
+    font-size: 13px;
+  }
+
+  input[type="text"]::placeholder { color: var(--text-muted); }
+
+  button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-family: var(--sans);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--focus); }
+  button.primary {
+    background: var(--focus);
+    border-color: var(--focus);
+    color: #fff;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 720px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+
+  .stat .label {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .stat .value {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 500;
+  }
+
+  .stat.blocked .value { color: var(--blocked); }
+  .stat.allowed .value { color: var(--allowed); }
+
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .toolbar input[type="text"] { width: 220px; }
+  .toolbar .spacer { flex: 1; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  thead th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .mono { font-family: var(--mono); font-size: 12.5px; color: var(--text-muted); }
+
+  .status-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .status-pill.blocked { background: var(--blocked-bg); color: var(--blocked); }
+  .status-pill.allowed { background: var(--allowed-bg); color: var(--allowed); }
+
+  .prompt-cell {
+    max-width: 360px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .prompt-cell.collapsed {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .empty, .error-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-muted);
+  }
+  .error-state { color: var(--blocked); }
+  .empty .hint, .error-state .hint {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  .tune-note {
+    margin-top: 28px;
+    padding: 14px 16px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .tune-note strong { color: var(--text); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <h1>LLM-Guard <span>Review Console</span></h1>
+    <div class="conn">
+      <span><span id="connDot" class="conn-dot"></span><span id="connText">Connecting…</span></span>
+      <label style="display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="autoRefresh" checked>
+        Auto-refresh (10s)
+      </label>
+      <button id="refreshBtn">Refresh</button>
+    </div>
+  </header>
+
+  <section class="stats">
+    <div class="stat"><div class="label">Total requests</div><div class="value" id="statTotal">—</div></div>
+    <div class="stat blocked"><div class="label">Blocked</div><div class="value" id="statBlocked">—</div></div>
+    <div class="stat allowed"><div class="label">Allowed</div><div class="value" id="statAllowed">—</div></div>
+    <div class="stat"><div class="label">Block rate</div><div class="value" id="statRate">—</div></div>
+  </section>
+
+  <div class="toolbar">
+    <select id="filterAllowed">
+      <option value="">All events</option>
+      <option value="false" selected>Blocked only</option>
+      <option value="true">Allowed only</option>
+    </select>
+    <input type="text" id="filterUser" placeholder="Filter by user ID…">
+    <div class="spacer"></div>
+    <select id="limitSelect">
+      <option value="25">25 rows</option>
+      <option value="50" selected>50 rows</option>
+      <option value="100">100 rows</option>
+    </select>
+  </div>
+
+  <table id="eventsTable">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>User</th>
+        <th>Source</th>
+        <th>Rule / Reason</th>
+        <th>Status</th>
+        <th>Prompt</th>
+      </tr>
+    </thead>
+    <tbody id="eventsBody"></tbody>
+  </table>
+  <div id="emptyState" class="empty" style="display:none;">
+    No blocked prompts yet. <div class="hint">Events will appear here as the firewall acts on real traffic.</div>
+  </div>
+  <div id="errorState" class="error-state" style="display:none;">
+    Can't reach the analytics service. <div class="hint" id="errorDetail"></div>
+  </div>
+
+  <div class="tune-note">
+    <strong>Tuning guardrail sensitivity:</strong> this console is read-only. Threshold and rule changes are made directly in <code>services/firewall/</code> and <code>proxy/config.yaml</code>, then re-verified live — not from this page.
+  </div>
+</div>
+
+<script>
+  const API_BASE = window.location.hash.slice(1) || "http://127.0.0.1:9200";
+  let refreshTimer = null;
+
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s ?? "";
+    return d.innerHTML;
+  }
+
+  function formatTime(ts) {
+    if (!ts) return "—";
+    try {
+      const d = new Date(ts);
+      return d.toLocaleString(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    } catch { return ts; }
+  }
+
+  async function fetchJSON(path) {
+    const res = await fetch(API_BASE + path);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  function setConn(ok, detail) {
+    const dot = document.getElementById("connDot");
+    const text = document.getElementById("connText");
+    dot.className = "conn-dot " + (ok ? "ok" : "down");
+    text.textContent = ok ? "Connected" : "Disconnected";
+    if (!ok && detail) {
+      document.getElementById("errorDetail").textContent = detail;
+    }
+  }
+
+  function renderMetrics(m) {
+    document.getElementById("statTotal").textContent = m.total_requests ?? 0;
+    document.getElementById("statBlocked").textContent = m.total_blocked ?? 0;
+    document.getElementById("statAllowed").textContent = m.total_allowed ?? 0;
+    document.getElementById("statRate").textContent = (m.block_rate_percentage ?? 0) + "%";
+  }
+
+  function renderEvents(events) {
+    const body = document.getElementById("eventsBody");
+    const table = document.getElementById("eventsTable");
+    const empty = document.getElementById("emptyState");
+
+    if (!events.length) {
+      table.style.display = "none";
+      empty.style.display = "block";
+      return;
+    }
+    table.style.display = "table";
+    empty.style.display = "none";
+
+    body.innerHTML = events.map(e => `
+      <tr>
+        <td class="mono">${escapeHtml(formatTime(e.timestamp))}</td>
+        <td class="mono">${escapeHtml(e.user_id || "—")}</td>
+        <td class="mono">${escapeHtml(e.source || "—")}</td>
+        <td>${escapeHtml(e.rule_triggered || e.reason || "—")}</td>
+        <td><span class="status-pill ${e.allowed ? "allowed" : "blocked"}">${e.allowed ? "Allowed" : "Blocked"}</span></td>
+        <td class="prompt-cell collapsed" title="Click to expand" onclick="this.classList.toggle('collapsed')">${escapeHtml(e.prompt_sample || "—")}</td>
+      </tr>
+    `).join("");
+  }
+
+  async function refresh() {
+    const allowedFilter = document.getElementById("filterAllowed").value;
+    const userFilter = document.getElementById("filterUser").value.trim();
+    const limit = document.getElementById("limitSelect").value;
+
+    const params = new URLSearchParams({ limit });
+    if (allowedFilter !== "") params.set("allowed", allowedFilter);
+    if (userFilter !== "") params.set("user_id", userFilter);
+
+    try {
+      const [metrics, events] = await Promise.all([
+        fetchJSON("/api/v1/telemetry/metrics"),
+        fetchJSON("/api/v1/telemetry/events?" + params.toString()),
+      ]);
+      setConn(true);
+      document.getElementById("errorState").style.display = "none";
+      document.getElementById("eventsTable").style.display = events.length ? "table" : "none";
+      renderMetrics(metrics);
+      renderEvents(events);
+    } catch (err) {
+      setConn(false, `${API_BASE} — ${err.message}. Is the sidecar running? (uvicorn app:app --port 9200)`);
+      document.getElementById("eventsTable").style.display = "none";
+      document.getElementById("emptyState").style.display = "none";
+      document.getElementById("errorState").style.display = "block";
+    }
+  }
+
+  function scheduleAutoRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    if (document.getElementById("autoRefresh").checked) {
+      refreshTimer = setInterval(refresh, 10000);
+    }
+  }
+
+  document.getElementById("refreshBtn").addEventListener("click", refresh);
+  document.getElementById("filterAllowed").addEventListener("change", refresh);
+  document.getElementById("filterUser").addEventListener("input", debounce(refresh, 400));
+  document.getElementById("limitSelect").addEventListener("change", refresh);
+  document.getElementById("autoRefresh").addEventListener("change", scheduleAutoRefresh);
+
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  refresh();
+  scheduleAutoRefresh();
+</script>
+</body>
+</html>
