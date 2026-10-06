@@ -6,3 +6,4 @@ bin/
 rules_decisions.jsonl
 outputguard_flags.jsonl
 logs
+.pytest_cache/

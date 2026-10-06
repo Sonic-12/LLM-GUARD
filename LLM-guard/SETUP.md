@@ -61,7 +61,7 @@ Keycloak handles login and roles. Run it once:
 docker run -d --name keycloak -p 8081:8080 -e KEYCLOAK_ADMIN=admin -e KEYCLOAK_ADMIN_PASSWORD=admin123 quay.io/keycloak/keycloak:latest start-dev
 ```
 
-Then open localhost:8081, log into the admin console with admin/admin123, and set it up:
+Then open [localhost:8081](http://localhost:8081), log into the admin console with admin/admin123, and set it up:
 
 1. Create a realm called llmguard
 2. Under Realm roles, create admin, employee and guest
@@ -119,7 +119,6 @@ go run ./cmd/proxy
 
 You should see it say it's listening on port 8080.
 
-For the dashboard, [open dashboard.html](file:///D:/project/LLM-GUARD/LLM-guard/sidecar/analytics/dashboard.html) in your browser. No server needed for the page itself, it talks to the sidecar on its own.
 
 ## Getting tokens
 
@@ -129,11 +128,8 @@ cd D:\project\LLM-GUARD\LLM-guard\proxy
 $secret = "YOUR_CLIENT_SECRET"
 
 $adminToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=$secret" -d "grant_type=password" -d "username=admin-user" -d "password=Pass123" | ConvertFrom-Json).access_token
-
 $employeeToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=$secret" -d "grant_type=password" -d "username=employee-user" -d "password=Pass123" | ConvertFrom-Json).access_token
-
 $guestToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=$secret" -d "grant_type=password" -d "username=guest-user" -d "password=Pass123" | ConvertFrom-Json).access_token
-
 Write-Host "All 3 tokens fetched."
 ```
 
@@ -176,6 +172,10 @@ pytest test_analytics.py -v
 
 There are sample request files in proxy\testdata\manual. Run through all of them with the tokens from earlier.
 
+```powershell
+cd D:\project\LLM-GUARD\LLM-guard\proxy
+```
+
 Guest asking for the normal model, should go through fine:
 
 ```powershell
@@ -206,13 +206,7 @@ No token at all, should get rejected before any of this even runs:
 curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -d "@testdata\manual\default.json"
 ```
 
-After running these, check that the blocked ones actually got logged:
-
-```powershell
-Get-Content logs\telemetry_events.jsonl -Tail 5
-```
-
-and they should also show up on the dashboard.
+After running these, check that the blocked ones actually got logged in dashboard
 
 ## Shutting down
 
