@@ -1,9 +1,36 @@
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from services.firewall.classifier import predict_jailbreak
+from services.firewall.classifier import predict_jailbreak, get_thresholds, set_thresholds
 
 app = FastAPI(title="LLM-Guard Semantic Firewall Service")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+class ThresholdUpdate(BaseModel):
+    low: float
+    high: float
+
+
+@app.get("/v1/firewall/config")
+def get_config():
+    low, high = get_thresholds()
+    return {"low_threshold": low, "high_threshold": high}
+
+
+@app.post("/v1/firewall/config")
+def update_config(body: ThresholdUpdate, x_admin_key: Optional[str] = Header(default=None)):
+    # Optional guard: set FIREWALL_ADMIN_KEY to require a key for tuning.
+    required = os.getenv("FIREWALL_ADMIN_KEY")
+    if required and x_admin_key != required:
+        raise HTTPException(status_code=401, detail="invalid admin key")
+    try:
+        low, high = set_thresholds(body.low, body.high)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"low_threshold": low, "high_threshold": high}
 
 class InspectionRequest(BaseModel):
     prompt: str

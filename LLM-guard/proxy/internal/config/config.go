@@ -43,7 +43,6 @@ type OutputGuardConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	FlagLogPath string `yaml:"flag_log_path"`
 
-	TestMode bool `yaml:"test_mode"`
 }
 
 type UpstreamConfig struct {
@@ -115,7 +114,6 @@ func Load(path string) (*Config, error) {
 		OutputGuard: OutputGuardConfig{
 			Enabled:     flat["outputguard.enabled"] == "true",
 			FlagLogPath: flat["outputguard.flag_log_path"],
-			TestMode:    flat["outputguard.test_mode"] == "true",
 		},
 		Telemetry: TelemetryConfig{
 			Enabled:      flat["telemetry.enabled"] == "true",

@@ -2,11 +2,13 @@ import sqlite3
 import os
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 
 DB_PATH = os.getenv("AUDIT_DB_PATH", "audit_logs.db")
+DASHBOARD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
 
 app = FastAPI(title="LLM-GUARD SIEM & Analytics API", version="1.0.0")
 
@@ -61,6 +63,14 @@ class AuditEventSchema(BaseModel):
     rule_triggered: Optional[str] = None
     jailbreak_score: Optional[float] = 0.0
     prompt_sample: str
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard():
+    """Serve the security console at http://localhost:9200/dashboard"""
+    if not os.path.exists(DASHBOARD_PATH):
+        raise HTTPException(status_code=404, detail="dashboard.html not found next to app.py")
+    return FileResponse(DASHBOARD_PATH, media_type="text/html")
+
 
 @app.post("/api/v1/telemetry/ingest")
 def ingest_event(event: AuditEventSchema):

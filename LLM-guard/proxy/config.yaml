@@ -41,7 +41,6 @@ rbac:
 outputguard:
   enabled: true
   flag_log_path: "logs/outputguard_flags.jsonl"
-  test_mode: false
 
 telemetry:
   enabled: true

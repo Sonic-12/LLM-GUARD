@@ -14,23 +14,27 @@ ollama pull llama3.2:3b
 ollama pull llama3.1:8b
 ```
 
+All commands below are run from the **project root** (the folder that contains `proxy`, `dlp-service`, `services` and `sidecar`). It can be anywhere on your machine. Open each new terminal in that folder first. Blocks that enter a folder end with `cd ..` so you are back at the project root when running the next block in the same terminal.
+
 ## First time setup
 
 Go dependencies:
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard\proxy
+cd proxy
 go mod download
+cd ..
 ```
 
 DLP service:
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard\dlp-service
+cd dlp-service
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_md
+cd ..
 ```
 
 The spacy model has to be downloaded separately, pip install alone won't grab it.
@@ -38,16 +42,15 @@ The spacy model has to be downloaded separately, pip install alone won't grab it
 Firewall service:
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard
 python -m venv services\firewall\.venv
 .\services\firewall\.venv\Scripts\activate
 pip install -r services\firewall\requirements.txt
+New-Item services\__init__.py, services\firewall\__init__.py -ItemType File -Force
 ```
 
 Analytics sidecar:
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard
 python -m venv sidecar\analytics\.venv
 .\sidecar\analytics\.venv\Scripts\activate
 pip install -r sidecar\analytics\requirements.txt
@@ -88,7 +91,7 @@ ollama serve
 **Terminal 1 — DLP**
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard\dlp-service
+cd dlp-service
 .venv\Scripts\activate
 uvicorn app:app --reload --port 9100
 ```
@@ -96,7 +99,6 @@ uvicorn app:app --reload --port 9100
 **Terminal 2 — Firewall**
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard
 .\services\firewall\.venv\Scripts\activate
 uvicorn services.firewall.app:app --host 127.0.0.1 --port 5001
 ```
@@ -104,7 +106,6 @@ uvicorn services.firewall.app:app --host 127.0.0.1 --port 5001
 **Terminal 3 — Analytics sidecar**
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard
 .\sidecar\analytics\.venv\Scripts\activate
 cd sidecar\analytics
 uvicorn app:app --port 9200
@@ -113,7 +114,7 @@ uvicorn app:app --port 9200
 **Terminal 4 — Proxy**
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard\proxy
+cd proxy
 go run ./cmd/proxy
 ```
 
@@ -123,7 +124,7 @@ You should see it say it's listening on port 8080.
 ## Getting tokens
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard\proxy
+cd proxy
 
 $secret = "YOUR_CLIENT_SECRET"
 
@@ -131,6 +132,7 @@ $adminToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protoc
 $employeeToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=$secret" -d "grant_type=password" -d "username=employee-user" -d "password=Pass123" | ConvertFrom-Json).access_token
 $guestToken = (curl.exe -s -X POST "http://localhost:8081/realms/llmguard/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=llmguard-proxy" -d "client_secret=$secret" -d "grant_type=password" -d "username=guest-user" -d "password=Pass123" | ConvertFrom-Json).access_token
 Write-Host "All 3 tokens fetched."
+cd ..
 ```
 
 Replace YOUR_CLIENT_SECRET with the value from Keycloak's client credentials tab.
@@ -152,61 +154,34 @@ A normal reply back means the whole chain worked.
 
 ## Running the tests
 
-Go side, no other services need to be running for this:
+One script runs everything in order and stops at the first failure.
+
+**Before you start**
+
+- Firewall, DLP, analytics sidecar and proxy are running (Terminals 1 to 4)
+- Keycloak and Ollama are running
+- Tokens are fetched in this same window (see "Getting tokens")
+
+**Run (from the project root)**
 
 ```powershell
-cd D:\project\LLM-GUARD\LLM-guard\proxy
-go build ./... ; go vet ./... ; go test ./... -v
+.\tests\run_tests.ps1
 ```
 
-Python side:
+**What it checks**
 
-```powershell
-cd D:\project\LLM-GUARD\LLM-guard
-.\sidecar\analytics\.venv\Scripts\activate
-cd sidecar\analytics
-pytest test_analytics.py -v
-```
+1. Go build, vet and test
+2. Python tests for the analytics sidecar
+3. Live proxy checks:
+   - Guest, normal model: allowed
+   - Guest, premium model: blocked
+   - Guest, too long prompt: blocked
+   - Admin, hallucination test: allowed
+   - No token: rejected
 
-## Checking the live stack
+**After it passes**
 
-There are sample request files in proxy\testdata\manual. Run through all of them with the tokens from earlier.
-
-```powershell
-cd D:\project\LLM-GUARD\LLM-guard\proxy
-```
-
-Guest asking for the normal model, should go through fine:
-
-```powershell
-curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $guestToken" -d "@testdata\manual\default.json"
-```
-
-Guest asking for the premium model, should get blocked:
-
-```powershell
-curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $guestToken" -d "@testdata\manual\premium.json"
-```
-
-Guest sending a prompt that's too long, should also get blocked:
-
-```powershell
-curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $guestToken" -d "@testdata\manual\longprompt.json"
-```
-
-Admin asking something that could trigger the hallucination check, should go through, and may or may not get flagged in the log depending on how the model answers:
-
-```powershell
-curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $adminToken" -d "@testdata\manual\hallucination_test.json"
-```
-
-No token at all, should get rejected before any of this even runs:
-
-```powershell
-curl.exe -i -X POST http://localhost:8080/v1/chat/completions -H "Content-Type: application/json" -d "@testdata\manual\default.json"
-```
-
-After running these, check that the blocked ones actually got logged in dashboard
+Open the [Dashboard](http://localhost:9200/dashboard) and confirm the blocked requests were logged.
 
 ## Shutting down
 

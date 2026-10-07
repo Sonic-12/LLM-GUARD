@@ -86,18 +86,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var respBody []byte
 	var status int
-	if override, ok := testResponseOverride(body); s.cfg.OutputGuard.TestMode && ok {
-
-		log.Printf("[%s] TEST MODE: bypassing upstream LLM call with supplied override text", rc.RequestID)
-		respBody = syntheticChatResponse(override)
-		status = http.StatusOK
-	} else {
-		respBody, status, err = s.forward(r, rc.RequestID, body)
-		if err != nil {
-			log.Printf("[%s] upstream error: %v", rc.RequestID, err)
-			http.Error(w, "upstream LLM request failed", http.StatusBadGateway)
-			return
-		}
+	respBody, status, err = s.forward(r, rc.RequestID, body)
+	if err != nil {
+		log.Printf("[%s] upstream error: %v", rc.RequestID, err)
+		http.Error(w, "upstream LLM request failed", http.StatusBadGateway)
+		return
 	}
 
 	postStart := time.Now()
@@ -198,33 +191,6 @@ func (s *Server) doForward(ctx context.Context, method, target string, body []by
 	}
 
 	return respBody, resp.StatusCode, nil
-}
-
-func testResponseOverride(body []byte) (string, bool) {
-	var m struct {
-		Override string `json:"test_response_override"`
-	}
-	if err := json.Unmarshal(body, &m); err != nil || m.Override == "" {
-		return "", false
-	}
-	return m.Override, true
-}
-
-func syntheticChatResponse(content string) []byte {
-	resp := map[string]any{
-		"id":     "chatcmpl-testmode",
-		"object": "chat.completion",
-		"model":  "test-mode-override",
-		"choices": []map[string]any{
-			{
-				"index":         0,
-				"message":       map[string]any{"role": "assistant", "content": content},
-				"finish_reason": "stop",
-			},
-		},
-	}
-	out, _ := json.Marshal(resp) // fields above are fixed/valid; Marshal cannot fail here
-	return out
 }
 
 func (s *Server) logBlocked(rc *middleware.RequestContext, r *http.Request, source string, statusCode int, blockedBody []byte, originalBody []byte) {

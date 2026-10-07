@@ -7,3 +7,5 @@ rules_decisions.jsonl
 outputguard_flags.jsonl
 logs
 .pytest_cache/
+__init__.py
+audit_logs.db
