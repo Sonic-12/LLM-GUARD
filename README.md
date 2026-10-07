@@ -1,201 +1,105 @@
-# LLM-Guard
+<div align="center">
 
-**LLM-Guard** is a Generative AI Prompt Firewall designed to secure applications that interact with Large Language Models (LLMs).
+# 🛡️ LLM-Guard
 
-It operates as a security layer between an application and the LLM API, inspecting prompts before they reach the model. The system combines deterministic firewall rules, Data Loss Prevention (DLP), and AI-based threat detection to identify and prevent common LLM security threats.
+**Generative AI Prompt Firewall**
+
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-services-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Keycloak](https://img.shields.io/badge/Keycloak-OIDC%2FRBAC-000000?logo=keycloak&logoColor=white)](https://www.keycloak.org/)
+
+</div>
+
+---
 
 ## Overview
 
-As LLMs become integrated into enterprise applications, they introduce security risks including:
+- **LLM-Guard** is a reverse proxy that sits directly in front of a locally-served LLM and enforces
+  authentication, threat detection, data loss prevention, and output validation on every request and
+  response, with no change required on the model-serving side.
+- **The issue:** once an LLM is wired into an application or internal system, it becomes a new attack
+  surface. Prompt injection, jailbreaking, and adversarial inputs can manipulate a model into ignoring
+  its instructions or disclosing data it was never meant to return, and conventional security tooling
+  isn't built to parse natural language, so none of it catches this.
+- **Why it matters:** because of this gap, LLM-Guard enforces at a single point in front of the model —
+  authenticating the caller, scoring prompts for jailbreak intent, masking sensitive data, and checking
+  the model's own reply — and blocks and logs anything that fails a check instead of letting it through.
 
-* Prompt Injection
-* Jailbreak Attempts
-* Sensitive Data Exposure
-* Malicious Instructions
-* Accidental Data Leakage
+## Features
 
-LLM-Guard addresses these risks by placing a security gateway between the application and the LLM service.
+- Token-based authentication and per-role access control (RBAC) via Keycloak/OIDC
+- Deterministic prompt rules: length limits and pattern blocklist, with Unicode normalization against obfuscated input
+- ML-based jailbreak classification with tunable sensitivity thresholds
+- Data loss prevention: detects and masks sensitive values before they reach the model, restores them on the way back
+- Prompt hardening against instruction-override and injection attempts
+- Output validation: toxicity checks, output data-leak re-scan, hallucination-signal flagging
+- Structured audit logging with a live security console
 
-### High-Level Architecture
+## Architecture
 
-```text
-    Application
-         │
-         ▼
-┌──────────────────┐
-│    LLM-Guard     │
-│   Prompt Proxy   │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  Firewall Rules  │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│    DLP Engine    │
-│ PII Detection &  │
-│    Redaction     │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  Threat Detection│
-│ Injection /      │
-│    Jailbreak     │
-└────────┬─────────┘
-         │
-         ▼
-      LLM API
+```mermaid
+flowchart TB
+    Client["Client"] --> RBAC["RBAC"]
+    RBAC --> Firewall["Firewall"]
+    Firewall --> ThreatDetect["Threat Detection"]
+    ThreatDetect --> DLPIn["DLP - Mask"]
+    DLPIn --> Hardening["Prompt Hardening"]
+    Hardening --> LLM["LLM"]
+    LLM --> OutputValidation["Output Validation"]
+    OutputValidation --> DLPOut["DLP - Restore"]
+    DLPOut --> Response["Final Response"]
 ```
 
-## Core Components
+RBAC gates every other stage — an unauthenticated or unauthorized request never reaches the
+firewall, the model, or any downstream check. Telemetry is not part of the sequential pipeline;
+every enforcement point reports its decision to it independently. Each stage is documented fully
+in [`Architecture`](LLM-guard\documentation\Architecture.md).
 
-### Prompt Proxy
+## Dashboard
 
-The Prompt Proxy acts as the primary gateway for LLM traffic.
+The analytics sidecar serves a single-page security console at `/dashboard`, covering:
 
-Responsibilities:
+- Blocked requests over time, severity mix, and breakdowns by guardrail layer and by rule
+- Users with the most blocks, and the latest events as they happen
+- Jailbreak score distribution and the firewall rules most frequently triggered
+- Access-control (RBAC) denials and output-guard rule triggers
 
-* Intercept LLM API requests
-* Inspect incoming request payloads
-* Apply security controls
-* Forward validated requests to the LLM API
-* Return the LLM response to the application
+## Project Structure
 
-The proxy layer is designed using **Go/Python** and communicates through REST APIs.
+Full setup, including prerequisites, dependency installation, and the run sequence across all
+services, is documented in [`Setup`](LLM-guard\documentation\Setup.md).
 
-### Data Loss Prevention
-
-The DLP Engine identifies sensitive information contained within prompt payloads before they are forwarded to an external LLM.
-
-Initial detection focuses on entities such as:
-
-* Email addresses
-* Phone numbers
-* Credit card information
-* Other sensitive identifiable information
-
-Detected entities can be redacted before the request reaches the LLM.
-
-**Technology:** Microsoft Presidio / NER-based detection
-
-### Firewall Rules
-
-The firewall provides a deterministic security layer for incoming prompts.
-
-Current controls include:
-
-* Prompt length restrictions
-* Keyword and pattern-based blocking
-* Unsafe prompt detection
-* Security policy enforcement
-* Request allow/block decisions
-
-This layer provides fast protection against known and easily identifiable attack patterns.
-
-### AI Threat Detection
-
-The AI Threat Detection module analyzes prompts for malicious behavior that may bypass basic rule-based filtering.
-
-The detection layer focuses on:
-
-* Prompt Injection
-* Jailbreak Attempts
-* Malicious instruction patterns
-* Suspicious prompt structures
-* Semantic characteristics of adversarial prompts
-
-The system is designed to support lightweight NLP/ML-based classification for identifying threats that cannot be reliably detected through static rules alone.
-
-## Request Processing Flow
-
-```text
-Incoming Request
-       │
-       ▼
-   Prompt Proxy
-       │
-       ▼
- Firewall Rules
-       │
-   ┌───┴────┐
-   │        │
- BLOCK    ALLOW
-            │
-            ▼
-        DLP Engine
-            │
-            ▼
-     Threat Detection
-            │
-       ┌────┴────┐
-       │         │
-     BLOCK     ALLOW
-                 │
-                 ▼
-              LLM API
+```
+LLM-guard/
+├── proxy/                    # Go reverse proxy
+│   ├── cmd/proxy/             # entry point
+│   └── internal/
+│       ├── proxy/             # HTTP server, model routing
+│       ├── middleware/        # hook chain definition
+│       ├── rbac/              # token verification, role and model gating
+│       ├── rules/              # length check, blocklist, normalization
+│       ├── threatdetect/      # client for the jailbreak classifier
+│       ├── dlp/                # client for the DLP service
+│       ├── hardening/         # system-prompt defense
+│       ├── outputguard/       # output toxicity, leak, and hallucination checks
+│       ├── telemetry/         # audit log writer and sidecar forwarder
+│       └── config/             # configuration loading
+├── dlp-service/               # Presidio-based PII masking service
+├── services/firewall/         # jailbreak classifier service
+├── sidecar/analytics/         # audit store and dashboard
+├── tests/                     # test runner and verification scripts
+└── documentation/             # design docs
 ```
 
-## Development Progress
+## Documentation
 
-### Week 1 — Proxy Architecture & DLP
+- [`Architecture`](LLM-guard\documentation\Architecture.md): system design, components, and trust boundaries
+- [`Setup`](LLM-guard\documentation\Setup.md): installation, configuration, running, and testing
+- [`Security`](LLM-guard\documentation\Security.md): security controls, authentication, and threat handling
 
-#### Reverse Proxy
-
-* Designed the initial reverse-proxy architecture.
-* Established the request interception flow.
-* Implemented the foundation for forwarding LLM API requests.
-* Established the security processing pipeline.
-
-#### DLP Pipeline
-
-* Designed the initial DLP processing workflow.
-* Integrated entity detection capabilities.
-* Added detection for sensitive entities.
-* Established the redaction stage before external LLM communication.
-
-### Week 2 — Firewall Rules & Jailbreak Detection
-
-#### Firewall Rules
-
-* Implemented the initial firewall-rule layer.
-* Added prompt-length restrictions.
-* Added keyword and pattern-based blocking.
-* Established security-rule evaluation.
-* Implemented request allow/block decisions.
-
-#### Jailbreak Detection
-
-* Started development of the AI threat-detection component.
-* Added the foundation for prompt-injection detection.
-* Started identifying jailbreak patterns.
-* Established the foundation for semantic prompt analysis.
-* Prepared the detection layer for lightweight ML-based classification.
-
-## Technology Stack
-
-| Component               | Technology               |
-| ----------------------- | ------------------------ |
-| Proxy                   | Go / Python              |
-| DLP                     | Python                   |
-| NLP / ML                | Python                   |
-| Entity Detection        | Microsoft Presidio / NER |
-| API Communication       | REST                     |
-| LLM Integration         | OpenAI-compatible APIs   |
-| Development Environment | Windows / Ubuntu         |
-
-## Security Objectives
-
-LLM-Guard is designed around four primary security objectives:
-
-1. **Inspect** — Analyze prompts before they reach the LLM.
-2. **Protect** — Detect and redact sensitive information.
-3. **Detect** — Identify prompt injection and jailbreak attempts.
-4. **Enforce** — Apply security policies and block malicious requests.
-
-## Project Goal
-
-LLM-Guard aims to provide a security gateway for enterprise LLM applications by combining **traffic interception, deterministic firewall rules, Data Loss Prevention, and machine-learning-based threat detection** into a unified protection layer.
-
+## License
+![License](https://img.shields.io/badge/License-Proprietary-red)
+ 
+This project is **proprietary** and not open source. It was developed as part of the
+**Axlero Solutions Internship Program**. All rights are reserved

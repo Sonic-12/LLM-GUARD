@@ -1,5 +1,5 @@
 # LLM-Guard Setup
-
+> See also: [Architecture](architecture.md) · [Security Documentation](security.md)
 ## What you need
 
 - Go 1.21+
@@ -13,8 +13,6 @@ Pull the models once Ollama is installed:
 ollama pull llama3.2:3b
 ollama pull llama3.1:8b
 ```
-
-All commands below are run from the **project root** (the folder that contains `proxy`, `dlp-service`, `services` and `sidecar`). It can be anywhere on your machine. Open each new terminal in that folder first. Blocks that enter a folder end with `cd ..` so you are back at the project root when running the next block in the same terminal.
 
 ## First time setup
 
@@ -64,7 +62,7 @@ Keycloak handles login and roles. Run it once:
 docker run -d --name keycloak -p 8081:8080 -e KEYCLOAK_ADMIN=admin -e KEYCLOAK_ADMIN_PASSWORD=admin123 quay.io/keycloak/keycloak:latest start-dev
 ```
 
-Then open [localhost:8081](http://localhost:8081), log into the admin console with admin/admin123, and set it up:
+Then open [Keycloak](http://localhost:8081), log into the admin console with Username: admin, Password: admin123, and set it up:
 
 1. Create a realm called llmguard
 2. Under Realm roles, create admin, employee and guest
@@ -140,7 +138,7 @@ Replace YOUR_CLIENT_SECRET with the value from Keycloak's client credentials tab
 Tokens expire after 5 minutes. If a request suddenly starts returning 401, just run the script again.
 
 ## Quick test
-
+Wait for 10-15 seconds after getting the tokens, then run this to make sure the whole chain is working:
 ```powershell
 $body = @{
     model    = "llama3.2:3b"
