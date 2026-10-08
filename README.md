@@ -45,15 +45,40 @@
 
 ```mermaid
 flowchart TB
-    Client["Client"] --> RBAC["RBAC"]
-    RBAC --> Firewall["Firewall"]
-    Firewall --> ThreatDetect["Threat Detection"]
-    ThreatDetect --> DLPIn["DLP - Mask"]
-    DLPIn --> Hardening["Prompt Hardening"]
-    Hardening --> LLM["LLM"]
-    LLM --> OutputValidation["Output Validation"]
-    OutputValidation --> DLPOut["DLP - Restore"]
-    DLPOut --> Response["Final Response"]
+    %% Node Definitions
+    Client["Client"]
+    RBAC["RBAC"]
+    Firewall["Firewall"]
+    ThreatDetect["Threat Detection"]
+    DLPIn["3. DLP - Mask<br/><i>PII Masking</i>"]
+    Hardening["Prompt Hardening"]
+    LLM["4. Language Model<br/><i>(LLM)</i>"]
+    OutputValidation["Output Validation"]
+    DLPOut["DLP - Restore"]
+    Response["Final Response"]
+
+    %% Connections
+    Client --> RBAC
+    RBAC --> Firewall
+    Firewall --> ThreatDetect
+    ThreatDetect --> DLPIn
+    DLPIn --> Hardening
+    Hardening --> LLM
+    LLM --> OutputValidation
+    OutputValidation --> DLPOut
+    DLPOut --> Response
+
+    %% Color Styles (Matching Image Palette)
+    style Client fill:#eef2ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style RBAC fill:#eef2ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style Firewall fill:#eef2ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style ThreatDetect fill:#eef2ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style DLPIn fill:#f0f7ff,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    style Hardening fill:#eef2ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style LLM fill:#fffbeb,stroke:#d97706,stroke-width:3px,color:#451a03
+    style OutputValidation fill:#fdf4ff,stroke:#c026d3,stroke-width:2px,color:#701a75
+    style DLPOut fill:#fdf4ff,stroke:#c026d3,stroke-width:2px,color:#701a75
+    style Response fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d
 ```
 
 RBAC gates every other stage — an unauthenticated or unauthorized request never reaches the
