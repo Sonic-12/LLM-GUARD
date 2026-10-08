@@ -8,7 +8,12 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-services-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Keycloak](https://img.shields.io/badge/Keycloak-OIDC%2FRBAC-000000?logo=keycloak&logoColor=white)](https://www.keycloak.org/)
+<br>
 
+
+<p align="center">
+  <img src="LLM-guard/documentation/photos/LLM-GUARD.png" alt="API-Sentinel Dashboard" width="850">
+</p>
 </div>
 
 ---
@@ -54,12 +59,19 @@ flowchart TB
 RBAC gates every other stage — an unauthenticated or unauthorized request never reaches the
 firewall, the model, or any downstream check. Telemetry is not part of the sequential pipeline;
 every enforcement point reports its decision to it independently. Each stage is documented fully
-in [`Architecture`](LLM-guard\documentation\Architecture.md).
+in [`Architecture`](LLM-guard/documentation/Architecture.md).
 
 ## Dashboard
-
-The analytics sidecar serves a single-page security console at `/dashboard`, covering:
-
+<table>
+<tr>
+<td width="50%"><img src="LLM-guard/documentation/photos/Threat.png" alt="Threat"></td>
+<td width="50%"><img src="LLM-guard/documentation/photos/Firewall.png" alt="Firewall"></td>
+</tr>
+<tr>
+<td width="50%"><img src="LLM-guard/documentation/photos/Access.png" alt="Access"></td>
+<td width="50%"><img src="LLM-guard/documentation/photos/Overview.png" alt="Overview"></td>
+</tr>
+</table>
 - Blocked requests over time, severity mix, and breakdowns by guardrail layer and by rule
 - Users with the most blocks, and the latest events as they happen
 - Jailbreak score distribution and the firewall rules most frequently triggered
@@ -68,7 +80,7 @@ The analytics sidecar serves a single-page security console at `/dashboard`, cov
 ## Project Structure
 
 Full setup, including prerequisites, dependency installation, and the run sequence across all
-services, is documented in [`Setup`](LLM-guard\documentation\Setup.md).
+services, is documented in [`Setup`](LLM-guard/documentation/SETUP.md).
 
 ```
 LLM-guard/
@@ -94,12 +106,12 @@ LLM-guard/
 
 ## Documentation
 
-- [`Architecture`](LLM-guard\documentation\Architecture.md): system design, components, and trust boundaries
-- [`Setup`](LLM-guard\documentation\Setup.md): installation, configuration, running, and testing
-- [`Security`](LLM-guard\documentation\Security.md): security controls, authentication, and threat handling
+- [`Architecture`](LLM-guard/documentation/Architecture.md): system design, components, and trust boundaries
+- [`Setup`](LLM-guard/documentation/SETUP.md): installation, configuration, running, and testing
+- [`Security`](LLM-guard/documentation/security.md): security controls, authentication, and threat handling
 
 ## License
 ![License](https://img.shields.io/badge/License-Proprietary-red)
  
 This project is **proprietary** and not open source. It was developed as part of the
-**Axlero Solutions Internship Program**. All rights are reserved
+**Axlero Solutions Internship Program**. All rights are reserved.

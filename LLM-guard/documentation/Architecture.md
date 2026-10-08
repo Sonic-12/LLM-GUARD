@@ -1,6 +1,6 @@
 # LLM-Guard Architecture
 
-> See also: [Setup Guide](setup.md) · [Security Documentation](security.md)
+  > See also: [README](../../README.md) · [Setup Guide](SETUP.md) · [Security Documentation](security.md)
 
 ## 1. Architecture Overview
 
@@ -109,7 +109,7 @@ The proxy source is in `proxy/internal`. Each package implements one stage of th
 
 ### 3.2 Firewall service
 
-The classifier is a scikit-learn pipeline. It combines word features (one and two word sequences) and character features (three to five characters) and passes them to a logistic regression model. It is trained from `services/data/jailbreak_dataset.csv` and saved as `services/artifacts/jailbreak_model.joblib`. If the model file is missing, the service trains one at first start.
+The classifier is a scikit-learn pipeline. It combines word features (one and two word sequences) and character features (three to five characters) and passes them to a logistic regression model. It is trained from `services/firewall/data/jailbreak_dataset.csv` and saved as `services/firewall/artifacts/jailbreak_model.joblib`. If the model file is missing, the service trains one at first start.
 
 Two thresholds decide the result.
 
@@ -119,7 +119,7 @@ Two thresholds decide the result.
 | 0.45 to below 0.60 | Blocked and marked for review |
 | 0.60 and above | Blocked |
 
-Both values can be changed at runtime with `GET` and `POST /v1/firewall/config` and are saved to `services/artifacts/thresholds.json`.
+Both values can be changed at runtime with `GET` and `POST /v1/firewall/config` and are saved to `services/firewall/artifacts/thresholds.json`.
 
 ### 3.3 DLP service
 
@@ -153,7 +153,7 @@ Two further logs exist. `logs/rules_decisions.jsonl` records the rules stage out
 
 | Area | Technology |
 |---|---|
-| Proxy | Go 1.21 or later, standard library HTTP server |
+| Proxy | Go 1.22 or later, standard library HTTP server |
 | Services | Python 3.10 or later, FastAPI, Uvicorn, Pydantic |
 | Threat detection | scikit-learn (TF-IDF features, logistic regression), joblib |
 | Data loss prevention | Presidio Analyzer and Anonymizer, spaCy |
@@ -165,7 +165,7 @@ Two further logs exist. `logs/rules_decisions.jsonl` records the rules stage out
 
 ## 5. Security and Trust Boundaries
 
-The system is split into four zones. Input from the untrusted zone is never passed on until the proxy has checked it, and the model is never trusted to produce a safe answer without a check. The full threat model and the known limits are in [`security.md`](security.md).
+The system is split into four zones. Input from the untrusted zone is never passed on until the proxy has checked it, and the model is never trusted to produce a safe answer without a check. The full threat model and the known limits are in [`Security`](security.md).
 
 ```mermaid
 flowchart TB

@@ -1,6 +1,6 @@
 # LLM-Guard Security
 
-> See also: [Architecture](architecture.md) · [Setup Guide](setup.md)
+> See also: [README](../../README.md) · [Architecture](Architecture.md) · [Setup Guide](SETUP.md)
 
 This document describes the security controls implemented in LLM-Guard, the
 assumptions behind them, and their known limitations. It reflects the
@@ -24,7 +24,7 @@ further down the chain, and produces an audit event (§7).
 
 **Implementation:** `proxy/internal/rbac`
 
-- Tokens are OpenID Connect ID tokens issued by Keycloak, signed with RS256.
+- Tokens are access tokens (JWTs) issued by Keycloak, signed with RS256.
 - The proxy verifies each token itself: it fetches the identity provider's
   public signing keys (JWKS), checks the signature, issuer, authorized
   party (client), and expiry, and never forwards the client's password or

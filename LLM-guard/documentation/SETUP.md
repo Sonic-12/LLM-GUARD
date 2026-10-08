@@ -1,8 +1,8 @@
 # LLM-Guard Setup
-> See also: [Architecture](architecture.md) · [Security Documentation](security.md)
+  > See also: [README](../../README.md) · [Architecture](Architecture.md) · [Security Documentation](security.md)
 ## What you need
 
-- Go 1.21+
+- Go 1.22+
 - Python 3.10+
 - Ollama
 - Docker Desktop (for Keycloak)
@@ -147,12 +147,17 @@ $body = @{
 
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/v1/chat/completions" -Method Post -Body $body -ContentType "application/json" -Headers @{ Authorization = "Bearer $adminToken" }
 ```
-
+>Also: If it returns:  `{"allowed":false,"status_code":503,"reason":"INSPECTION_SERVICE_UNAVAILABLE_FAIL_CLOSED"}`
+retry after a few seconds.
+    
 A normal reply back means the whole chain worked.
 
 ## Running the tests
 
-One script runs everything in order and stops at the first failure.
+  Historical latency and red-team results from an earlier verification pass
+  are recorded in [`Mid Project Review`](Mid-Project-Review.md).
+
+**One script runs everything in order and stops at the first failure.**
 
 **Before you start**
 
@@ -164,18 +169,31 @@ One script runs everything in order and stops at the first failure.
 
 ```powershell
 .\tests\run_tests.ps1
+cd ..
 ```
 
 **What it checks**
+- Go build, vet, and tests
+- Python analytics sidecar tests
+- Guest normal-model access
+- Guest premium-model restriction
+- Prompt length validation
+- Admin hallucination test
+- Missing-token rejection
 
-1. Go build, vet and test
-2. Python tests for the analytics sidecar
-3. Live proxy checks:
-   - Guest, normal model: allowed
-   - Guest, premium model: blocked
-   - Guest, too long prompt: blocked
-   - Admin, hallucination test: allowed
-   - No token: rejected
+```powershell
+$env:ADMIN_TOKEN = $adminToken
+$env:GUEST_TOKEN = $guestToken
+$env:ADMIN_TOKEN.Length
+python tests\attack_suite.py
+```
+**What it checks**
+- Runs the attack suite through the proxy
+- Tests RBAC, firewall, ML detection, DLP, and output validation
+- Verifies telemetry across security layers
+- Confirms benign prompts remain allowed
+- Reports pass/fail status per layer
+- Returns a non-zero exit code on failure
 
 **After it passes**
 
