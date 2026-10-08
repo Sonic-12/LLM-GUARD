@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM-Guard Security Console</title>
+<style>
+:root{--bg:#f3f5f8;--sf:#fff;--sf2:#f8f9fb;--ln:#dde2e9;--tx:#16202c;--mu:#5b6877;--ac:#2563a8;--ac2:#e8f0fa;--cr:#b4281e;--hi:#c2570c;--me:#a67c00;--lo:#4d6b88;--ok:#1d7a4a;--mono:Consolas,"Cascadia Mono",Menlo,monospace;--sans:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+:root[data-theme=dark]{--bg:#0e141b;--sf:#151d27;--sf2:#1a2430;--ln:#26323f;--tx:#e3e9f0;--mu:#8d9bab;--ac:#5aa0e6;--ac2:#1a2a3d;--cr:#f0675c;--hi:#f09a52;--me:#d9b13b;--lo:#7f9bb8;--ok:#4cc38a}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 var(--sans);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+nav{background:var(--sf);border-right:1px solid var(--ln);padding:18px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav h1{font-size:15px;margin:0 8px 2px}nav .sub{color:var(--mu);font-size:12px;margin:0 8px 16px}
+nav a{display:block;padding:8px 10px;border-radius:5px;color:var(--mu);text-decoration:none;margin-bottom:2px}
+nav a:hover{background:var(--sf2);color:var(--tx)}nav a.on{background:var(--ac2);color:var(--ac);font-weight:600}
+main{min-width:0;padding:0 24px 48px}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 0;border-bottom:1px solid var(--ln);margin-bottom:18px}
+.top h2{margin:0;font-size:18px;flex:1;min-width:160px}
+select,input,button{font:inherit;font-size:13px;color:var(--tx);background:var(--sf);border:1px solid var(--ln);border-radius:5px;padding:6px 10px}
+button{cursor:pointer}button:hover,select:hover,input:hover{border-color:var(--mu)}button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+.st{font-size:12.5px;color:var(--mu);display:flex;align-items:center;gap:6px}.dot{width:8px;height:8px;border-radius:50%;background:var(--mu)}.dot.ok{background:var(--ok)}.dot.bad{background:var(--cr)}
+.banner{background:var(--sf);border:1px solid var(--cr);border-left:4px solid var(--cr);border-radius:5px;padding:10px 14px;margin-bottom:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:6px;padding:14px 16px;min-width:0}
+.kpi .k{color:var(--mu);font-size:12.5px}.kpi .v{font-size:26px;font-weight:600;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kpi .n{color:var(--mu);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}.wide{grid-column:1/-1}
+.card h3{margin:0 0 2px;font-size:14px}.card .note{color:var(--mu);font-size:12.5px;margin-bottom:10px}
+.empty{color:var(--mu);text-align:center;padding:26px 8px;font-size:13px}
+svg{display:block;width:100%;height:auto}svg text{font:11px var(--sans);fill:var(--mu)}
+.rank{display:grid;grid-template-columns:minmax(110px,42%) 1fr 34px;gap:10px;align-items:center;padding:4px 0;font-size:13px}
+.rank .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rank .b{height:8px;background:var(--sf2);border-radius:2px}.rank .b i{display:block;height:100%;background:var(--ac);border-radius:2px}.rank .c{text-align:right;color:var(--mu)}
+.sevbar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--sf2);margin:6px 0 10px}
+.tw{background:var(--sf);border:1px solid var(--ln);border-radius:6px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:820px}th{text-align:left;font-weight:600;font-size:12.5px;color:var(--mu);padding:9px 12px;border-bottom:1px solid var(--ln);background:var(--sf2);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--ln);vertical-align:top}tbody tr{cursor:pointer}tbody tr:hover{background:var(--sf2)}tbody tr:last-child td{border-bottom:0}
+td.p{max-width:300px;font:12px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mono{font:12px var(--mono)}.mu{color:var(--mu)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;border:1px solid currentColor;white-space:nowrap}
+.s-critical{color:var(--cr)}.s-high{color:var(--hi)}.s-medium{color:var(--me)}.s-low{color:var(--lo)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}.bar .sp{flex:1}.bar input[type=text]{width:210px}
+.foot{color:var(--mu);font-size:12.5px;margin-top:8px}
+.hs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+dl{margin:0}dt{color:var(--mu);font-size:12.5px;margin-top:10px}dd{margin:2px 0 0;word-break:break-word}
+aside{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--sf);border-left:1px solid var(--ln);padding:20px 22px;overflow-y:auto;transform:translateX(100%);transition:transform .15s;z-index:10;box-shadow:-8px 0 24px rgba(0,0,0,.18)}
+aside.open{transform:none}aside pre{white-space:pre-wrap;word-break:break-word;font:12px/1.5 var(--mono);background:var(--bg);border:1px solid var(--ln);border-radius:4px;padding:10px;margin:2px 0 0}
+.skel{height:64px;border-radius:6px;background:var(--sf);border:1px solid var(--ln)}
+@media(max-width:900px){.app{grid-template-columns:1fr}nav{position:static;height:auto;display:flex;gap:4px;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--ln)}nav h1,nav .sub{display:none}#nav{display:flex;gap:4px}nav a{white-space:nowrap;margin:0}.grid{grid-template-columns:1fr}main{padding:0 14px 40px}}
+@media(prefers-reduced-motion:reduce){aside{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<nav aria-label="Sections"><h1>LLM-Guard</h1><div class="sub">Generative AI prompt firewall</div><div id="nav"></div></nav>
+<main>
+<div class="top">
+  <h2 id="title">Overview</h2>
+  <select id="range" aria-label="Date range"><option value="1">Last hour</option><option value="24">Last 24 hours</option><option value="168">Last 7 days</option><option value="720">Last 30 days</option><option value="0" selected>All loaded events</option></select>
+  <label class="st"><input type="checkbox" id="auto" checked> Auto refresh 15 s</label>
+  <button id="refresh" class="p">Refresh</button>
+  <button id="theme" aria-label="Toggle theme">Theme</button>
+  <span class="st"><i class="dot" id="dot"></i><span id="stat">Connecting</span></span>
+</div>
+<div id="view"><div class="skel"></div></div>
+</main>
+</div>
+<aside id="dr" aria-hidden="true"><button id="drx" style="float:right">Close</button><h3 style="margin:0">Event detail</h3><div id="drb"></div></aside>
+<script>
+const Q=new URLSearchParams(location.search);
+const API=Q.get("api")||(location.protocol.startsWith("http")?location.origin:"http://127.0.0.1:9200");
+const FW=Q.get("fw")||("http://"+(location.hostname||"127.0.0.1")+":5001");
+const PAGES=[["overview","Overview"],["threats","Threat detection"],["firewall","Firewall rules"],["access","Access control"],["output","Output validation"],["audit","Audit log"],["health","System health"]];
+const LAYER={rbac:"Access control (RBAC)",rules:"Firewall rules",outputguard:"Output validation",pre_hook_unknown:"Unclassified (input)",post_hook_unknown:"Unclassified (output)"};
+const S={events:[],metrics:null,fw:null,health:{sidecar:{},firewall:{}},err:null,loaded:false,flt:{src:"",rule:"",sev:"",user:"",text:""},timer:null};
+const $=s=>document.querySelector(s);
+const esc=v=>{const d=document.createElement("div");d.textContent=v==null?"":String(v);return d.innerHTML};
+const layer=s=>LAYER[s]||s||"Unknown";
+const user=e=>e.user_id||"Unauthenticated";
+const rule=e=>String(e.rule_triggered||e.reason||"").split(":")[0]||"No rule recorded";
+const tm=t=>{const d=new Date(t);return isNaN(d)?"-":d.toLocaleString([],{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})};
+const cnt=(a,f)=>{const m=new Map();a.forEach(e=>{const k=f(e);m.set(k,(m.get(k)||0)+1)});return[...m].sort((x,y)=>y[1]-x[1])};
+const T=()=>S.fw?{lo:S.fw.low_threshold,hi:S.fw.high_threshold}:{lo:.45,hi:.6};
+/* Severity is derived from real fields: classifier score vs live thresholds, then layer. */
+function sev(e){const t=T(),s=e.jailbreak_score||0;if(s>=t.hi)return"critical";if(s>=t.lo||e.source==="outputguard")return"high";if(e.source==="rules"||e.source==="rbac")return"medium";return"low"}
+const pill=e=>{const s=sev(e);return'<span class="pill s-'+s+'">'+s[0].toUpperCase()+s.slice(1)+'</span>'};
+const inRange=()=>{const h=+$("#range").value;return h?S.events.filter(e=>new Date(e.timestamp).getTime()>=Date.now()-h*36e5):S.events};
+
+async function call(url){const t0=performance.now();const r=await fetch(url);const ms=Math.round(performance.now()-t0);if(!r.ok)throw new Error("HTTP "+r.status);return{data:await r.json(),ms}}
+async function load(){
+  const [m,ev,fw]=await Promise.allSettled([call(API+"/api/v1/telemetry/metrics"),call(API+"/api/v1/telemetry/events?limit=500"),call(FW+"/v1/firewall/config")]);
+  const okS=m.status==="fulfilled"&&ev.status==="fulfilled";
+  S.health={sidecar:okS?{ok:true,ms:m.value.ms}:{ok:false,err:(m.reason||ev.reason||{}).message},firewall:fw.status==="fulfilled"?{ok:true,ms:fw.value.ms}:{ok:false,err:fw.reason&&fw.reason.message}};
+  S.fw=fw.status==="fulfilled"?fw.value.data:null;
+  if(okS){S.metrics=m.value.data;S.events=ev.value.data;S.err=null;S.loaded=true;S.at=new Date()}
+  else S.err=(m.reason||ev.reason).message;
+  $("#dot").className="dot "+(S.err?"bad":"ok");
+  $("#stat").textContent=S.err?"Analytics service unreachable":"Updated "+S.at.toLocaleTimeString();
+  render();
+}
+
+function rank(items){if(!items.length)return'<div class="empty">No events in this range.</div>';const top=items.slice(0,8),mx=top[0][1];return top.map(([l,c])=>'<div class="rank"><span class="l" title="'+esc(l)+'">'+esc(l)+'</span><span class="b"><i style="width:'+c/mx*100+'%"></i></span><span class="c">'+c+'</span></div>').join("")}
+function sevBar(list){const o={critical:0,high:0,medium:0,low:0},n=list.length||1;list.forEach(e=>o[sev(e)]++);return'<div class="sevbar" role="img" aria-label="Severity mix">'+Object.keys(o).map(k=>'<i class="s-'+k+'" style="width:'+o[k]/n*100+'%;background:currentColor"></i>').join("")+'</div>'+Object.keys(o).map(k=>'<span class="pill s-'+k+'" style="margin-right:6px">'+k[0].toUpperCase()+k.slice(1)+' '+o[k]+'</span>').join("")}
+function timeChart(list){
+  const ts=list.map(e=>new Date(e.timestamp).getTime()).filter(t=>!isNaN(t));if(!ts.length)return'<div class="empty">No events in this range.</div>';
+  const mn=Math.min(...ts),mx=Math.max(...ts),hr=(mx-mn)<=48*36e5,st=hr?36e5:864e5;
+  const fl=t=>{const d=new Date(t);hr?d.setMinutes(0,0,0):d.setHours(0,0,0,0);return d.getTime()};
+  const s0=fl(mn),n=Math.round((fl(mx)-s0)/st)+1,b=new Array(n).fill(0);ts.forEach(t=>b[Math.round((fl(t)-s0)/st)]++);
+  const W=1000,H=200,L=36,R=8,Tp=8,B=24,pw=W-L-R,ph=H-Tp-B,top=Math.max(...b),ym=top<=4?4:Math.ceil(top/4)*4,bw=pw/n;
+  const lab=i=>new Date(s0+i*st).toLocaleString([],hr?{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}:{month:"short",day:"2-digit"});
+  let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Events over time">';
+  for(let i=0;i<=4;i++){const y=Tp+ph-ph*i/4;s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--ln)"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end">'+ym*i/4+'</text>'}
+  b.forEach((v,i)=>{const h=ph*v/ym;s+='<rect x="'+(L+i*bw+1)+'" y="'+(Tp+ph-h)+'" width="'+Math.max(1,bw-2)+'" height="'+h+'" fill="var(--ac)"><title>'+lab(i)+': '+v+'</title></rect>'});
+  const k=Math.min(n,6);for(let i=0;i<k;i++){const x=k===1?0:Math.round(i*(n-1)/(k-1));s+='<text x="'+(L+x*bw+bw/2)+'" y="'+(H-6)+'" text-anchor="middle">'+lab(x)+'</text>'}
+  return'<div class="foot" style="margin:0 0 4px">Per '+(hr?"hour":"day")+'</div>'+s+'</svg>'}
+function scoreChart(list){
+  const sc=list.map(e=>e.jailbreak_score).filter(v=>typeof v==="number"&&v>0);
+  if(!sc.length)return'<div class="empty">No classifier-scored events in this range. Scores exist only when the jailbreak classifier decides.</div>';
+  const bins=new Array(10).fill(0);sc.forEach(v=>bins[Math.min(9,Math.floor(v*10))]++);
+  const W=520,H=200,L=32,R=8,Tp=8,B=26,pw=W-L-R,ph=H-Tp-B,bw=pw/10,t=T(),top=Math.max(...bins),ym=top<=4?4:Math.ceil(top/4)*4;
+  let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Classifier score distribution"><rect x="'+(L+t.lo*pw)+'" y="'+Tp+'" width="'+(t.hi-t.lo)*pw+'" height="'+ph+'" fill="var(--me)" opacity=".22"/><line x1="'+(L+t.lo*pw)+'" x2="'+(L+t.lo*pw)+'" y1="'+Tp+'" y2="'+(Tp+ph)+'" stroke="var(--me)" stroke-dasharray="4 3"/>';
+  for(let i=0;i<=4;i++){const y=Tp+ph-ph*i/4;s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--ln)"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end">'+ym*i/4+'</text>'}
+  bins.forEach((v,i)=>{const h=ph*v/ym;s+='<rect x="'+(L+i*bw+2)+'" y="'+(Tp+ph-h)+'" width="'+(bw-4)+'" height="'+h+'" fill="var(--cr)"><title>'+(i/10).toFixed(1)+' to '+((i+1)/10).toFixed(1)+': '+v+'</title></rect>'});
+  for(let i=0;i<=5;i++)s+='<text x="'+(L+i*pw/5)+'" y="'+(H-8)+'" text-anchor="middle">'+(i/5).toFixed(1)+'</text>';
+  return s+'</svg><div class="foot">Shaded band: flagged for review ('+t.lo.toFixed(2)+' to '+t.hi.toFixed(2)+'). Dashed line: block threshold.'+(S.fw?'':' Firewall service unreachable, showing default thresholds.')+'</div>'}
+
+let VIEW=[];
+function table(list,limit){
+  VIEW=list;const rows=list.slice(0,limit||100);
+  if(!list.length)return'<div class="tw"><div class="empty">No events match the current filters.</div></div>';
+  return'<div class="tw"><table><thead><tr><th>Time</th><th>Severity</th><th>User</th><th>Layer</th><th>Rule</th><th>HTTP</th><th>Score</th><th>Prompt sample</th></tr></thead><tbody>'+rows.map((e,i)=>'<tr data-i="'+i+'" tabindex="0"><td class="mu">'+esc(tm(e.timestamp))+'</td><td>'+pill(e)+'</td><td>'+esc(user(e))+'</td><td>'+esc(layer(e.source))+'</td><td class="mono">'+esc(rule(e))+'</td><td>'+esc(e.status_code)+'</td><td>'+(e.jailbreak_score?e.jailbreak_score.toFixed(2):'<span class="mu">-</span>')+'</td><td class="p" title="'+esc(e.prompt_sample)+'">'+esc(e.prompt_sample||"-")+'</td></tr>').join("")+'</tbody></table></div><div class="foot">Showing '+rows.length+' of '+list.length+' events. Select a row for detail.</div>'}
+const kpi=(k,v,n)=>'<div class="card kpi"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="n">'+(n||"&nbsp;")+'</div></div>';
+
+const V={
+overview(r){
+  const m=S.metrics,u=new Set(r.map(user)).size,sc=r.map(e=>e.jailbreak_score).filter(v=>v>0),tr=cnt(r,rule)[0],crit=r.filter(e=>sev(e)==="critical").length;
+  return'<div class="kpis">'+kpi("Blocked, all time",m.total_blocked.toLocaleString(),m.total_allowed?m.total_allowed.toLocaleString()+" allowed also logged":"Only blocked requests are logged")+
+  (m.total_allowed?kpi("Block rate",m.block_rate_percentage+"%","Of all logged requests"):"")+
+  kpi("Blocked in range",r.length,"Selected date range")+kpi("Critical events",crit,"Score above review band")+kpi("Distinct users",u,"Unauthenticated counts as one")+
+  kpi("Mean jailbreak score",sc.length?(sc.reduce((a,b)=>a+b,0)/sc.length).toFixed(2):"-",sc.length+" scored events")+kpi("Top rule",'<span style="font-size:16px">'+esc(tr?tr[0]:"-")+'</span>',tr?tr[1]+" events":"")+'</div>'+
+  '<div class="grid"><div class="card wide"><h3>Blocked requests over time</h3>'+timeChart(r)+'</div>'+
+  '<div class="card"><h3>Severity mix</h3><div class="note">Derived from classifier score and guardrail layer</div>'+sevBar(r)+'</div>'+
+  '<div class="card"><h3>By guardrail layer</h3><div class="note">Which control made the decision</div>'+rank(cnt(r,e=>layer(e.source)))+'</div>'+
+  '<div class="card"><h3>By rule</h3><div class="note">Rule or reason code recorded per block</div>'+rank(cnt(r,rule))+'</div>'+
+  '<div class="card"><h3>Users with most blocks</h3><div class="note">Repeated attempts</div>'+rank(cnt(r,user))+'</div></div>'+
+  '<h3 style="margin:0 0 8px">Latest events</h3>'+table(r,8)},
+threats(r){
+  const j=r.filter(e=>e.jailbreak_score>0);
+  return'<div class="kpis">'+kpi("Classifier-scored blocks",j.length,"Jailbreak / injection detections")+kpi("Critical",j.filter(e=>sev(e)==="critical").length,"At or above "+T().hi.toFixed(2))+kpi("In review band",j.filter(e=>sev(e)==="high").length,"Between thresholds")+kpi("Highest score",j.length?Math.max(...j.map(e=>e.jailbreak_score)).toFixed(2):"-","")+'</div>'+
+  '<div class="grid"><div class="card"><h3>Score distribution</h3>'+scoreChart(r)+'</div><div class="card"><h3>Users behind detections</h3><div class="note">Scored detections per user</div>'+rank(cnt(j,user))+'</div></div>'+
+  '<h3 style="margin:0 0 8px">Detections, highest score first</h3>'+table(j.slice().sort((a,b)=>b.jailbreak_score-a.jailbreak_score))},
+firewall(r){
+  const t=T(),rl=r.filter(e=>e.source==="rules"),h=S.health.firewall;
+  return'<div class="kpis">'+kpi("Firewall service",h.ok?'<span style="color:var(--ok)">Online</span>':'<span style="color:var(--cr)">Unreachable</span>',h.ok?h.ms+" ms response":esc(h.err||""))+kpi("Block threshold",S.fw?t.lo.toFixed(2):"-","Classifier score")+kpi("Review band ends",S.fw?t.hi.toFixed(2):"-","Classifier score")+kpi("Rule-layer blocks",rl.length,"In selected range")+'</div>'+
+  '<div class="grid"><div class="card"><h3>Rules triggered</h3><div class="note">Rule-layer and classifier reason codes</div>'+rank(cnt(r.filter(e=>e.source!=="rbac"&&e.source!=="outputguard"),rule))+'</div>'+
+  '<div class="card"><h3>Guardrail sensitivity</h3><div class="note">A lower block score is stricter: more blocks, more false positives. Applies immediately and persists across firewall restarts.</div>'+
+  (S.fw?'<label>Block at score &ge; <b id="lv">'+t.lo.toFixed(2)+'</b><br><input type="range" id="ls" min="0.10" max="0.90" step="0.05" value="'+t.lo+'"></label><br><label>Review band ends at <b id="hv">'+t.hi.toFixed(2)+'</b><br><input type="range" id="hs" min="0.15" max="0.95" step="0.05" value="'+t.hi+'"></label><div class="bar" style="margin-top:12px"><input type="password" id="ak" placeholder="Admin key, if set" autocomplete="off"><button id="sv" class="p">Apply</button><span id="sm" class="foot"></span></div>':'<div class="empty">Firewall service not reachable at '+esc(FW)+'. Start it to view or change thresholds.</div>')+'</div></div>'+
+  '<h3 style="margin:0 0 8px">Firewall rule blocks</h3>'+table(rl)},
+access(r){
+  const ac=r.filter(e=>e.source==="rbac");
+  return'<div class="kpis">'+kpi("Access denials",ac.length,"Role or token rejections")+kpi("Users denied",new Set(ac.map(user)).size,"Distinct identities")+kpi("Unauthenticated",ac.filter(e=>!e.user_id).length,"No valid token")+'</div>'+
+  '<div class="grid"><div class="card"><h3>Denial reasons</h3>'+rank(cnt(ac,rule))+'</div><div class="card"><h3>Users denied most</h3>'+rank(cnt(ac,user))+'</div></div>'+
+  '<h3 style="margin:0 0 8px">Access-control events</h3>'+table(ac)+'<div class="foot">Roles and users are managed in Keycloak and proxy/config.yaml; this page shows enforcement outcomes only.</div>'},
+output(r){
+  const o=r.filter(e=>e.source==="outputguard");
+  return'<div class="kpis">'+kpi("Responses blocked",o.length,"Hallucination or toxic content stopped")+kpi("Users affected",new Set(o.map(user)).size,"")+'</div>'+
+  '<div class="grid"><div class="card"><h3>Output rules triggered</h3>'+rank(cnt(o,rule))+'</div><div class="card"><h3>Over time</h3>'+timeChart(o)+'</div></div>'+
+  '<h3 style="margin:0 0 8px">Blocked responses</h3>'+table(o)+'<div class="foot">Responses that were only flagged, not blocked, are written to logs/outputguard_flags.jsonl and are not sent to this console.</div>'},
+audit(r){
+  const f=S.flt,L=a=>[...new Set(a)].sort();
+  const opt=(id,vals,all,cur)=>'<select id="'+id+'" aria-label="'+all+'"><option value="">'+all+'</option>'+vals.map(v=>'<option value="'+esc(v[0])+'"'+(v[0]===cur?" selected":"")+'>'+esc(v[1])+'</option>').join("")+'</select>';
+  return'<div class="bar">'+opt("fs",L(r.map(e=>e.source||"")).map(s=>[s,layer(s)]),"All layers",f.src)+opt("fr",L(r.map(rule)).map(s=>[s,s]),"All rules",f.rule)+opt("fv",["critical","high","medium","low"].map(s=>[s,s[0].toUpperCase()+s.slice(1)]),"All severities",f.sev)+opt("fu",L(r.map(user)).map(s=>[s,s]),"All users",f.user)+'<input type="text" id="ft" placeholder="Search user, IP, prompt, event ID" value="'+esc(f.text)+'"><div class="sp"></div><button id="xc">Export CSV</button><button id="xj">Export JSON</button></div><div id="tbl">'+table(filt(r),200)+'</div>'},
+health(){
+  const h=S.health,age=S.events.length?Math.round((Date.now()-new Date(S.events[0].timestamp))/6e4):null;
+  const card=(n,o,d)=>'<div class="card"><h3>'+n+'</h3><div class="note">'+esc(d)+'</div><div style="font-size:20px;font-weight:600;color:var(--'+(o.ok?"ok":"cr")+')">'+(o.ok?"Online":"Unreachable")+'</div><div class="mu">'+(o.ok?"Round trip from this browser: "+o.ms+" ms":esc(o.err||""))+'</div></div>';
+  return'<div class="hs">'+card("Analytics sidecar",h.sidecar,API)+card("Firewall service",h.firewall,FW)+'<div class="card"><h3>Telemetry freshness</h3><div class="note">Latest event received</div><div style="font-size:20px;font-weight:600">'+(age==null?"No events":age<1?"Under a minute ago":age+" min ago")+'</div><div class="mu">'+(S.metrics?S.metrics.total_requests.toLocaleString()+" events stored":"")+'</div></div></div>'+
+  '<div class="foot">Latencies are measured from this browser to each service. The proxy and DLP service expose no health endpoint the console can call, so they are not shown.</div>'}
+};
+function filt(r){const f=S.flt,q=f.text.trim().toLowerCase();return r.filter(e=>(!f.src||(e.source||"")===f.src)&&(!f.rule||rule(e)===f.rule)&&(!f.sev||sev(e)===f.sev)&&(!f.user||user(e)===f.user)&&(!q||[user(e),e.client_ip,e.prompt_sample,e.event_id].join(" ").toLowerCase().includes(q)))}
+
+function page(){return location.hash.replace("#/","")||"overview"}
+function render(){
+  const p=PAGES.find(x=>x[0]===page())||PAGES[0];$("#title").textContent=p[1];
+  $("#nav").innerHTML=PAGES.map(x=>'<a href="#/'+x[0]+'"'+(x[0]===p[0]?' class="on" aria-current="page"':'')+'>'+x[1]+'</a>').join("");
+  if(!S.loaded){$("#view").innerHTML=S.err?'<div class="banner"><b>Cannot reach the analytics service</b><br>'+esc(API)+' ('+esc(S.err)+'). Start the sidecar on port 9200 and refresh.</div>':'<div class="skel"></div>';return}
+  const r=inRange();
+  $("#view").innerHTML=(S.err?'<div class="banner"><b>Showing last loaded data.</b> Refresh failed: '+esc(S.err)+'</div>':'')+V[p[0]](r);
+  bind(r);
+}
+function bind(r){
+  const g=id=>document.getElementById(id);
+  document.querySelectorAll("tbody tr").forEach(tr=>{tr.onclick=()=>openD(VIEW[+tr.dataset.i]);tr.onkeydown=e=>{if(e.key==="Enter")openD(VIEW[+tr.dataset.i])}});
+  if(g("fs")){const map={fs:"src",fr:"rule",fv:"sev",fu:"user"};Object.keys(map).forEach(id=>g(id).onchange=()=>{S.flt[map[id]]=g(id).value;g("tbl").innerHTML=table(filt(r),200);bind(r)});
+    g("ft").oninput=()=>{S.flt.text=g("ft").value;g("tbl").innerHTML=table(filt(r),200);bind(r)};
+    g("xj").onclick=()=>dl("json",JSON.stringify(filt(r),null,2),"application/json");
+    g("xc").onclick=()=>{const c=["timestamp","event_id","user_id","client_ip","source","rule_triggered","reason","status_code","jailbreak_score","prompt_length","prompt_sample"],q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';dl("csv",c.join(",")+"\n"+filt(r).map(e=>c.map(k=>q(e[k])).join(",")).join("\n"),"text/csv")}}
+  if(g("sv")){g("ls").oninput=()=>g("lv").textContent=(+g("ls").value).toFixed(2);g("hs").oninput=()=>g("hv").textContent=(+g("hs").value).toFixed(2);
+    g("sv").onclick=async()=>{const lo=+g("ls").value,hi=Math.max(+g("hs").value,lo);try{const x=await fetch(FW+"/v1/firewall/config",{method:"POST",headers:{"Content-Type":"application/json","X-Admin-Key":g("ak").value},body:JSON.stringify({low:lo,high:hi})});g("sm").textContent=x.ok?"Applied.":"Rejected (HTTP "+x.status+").";if(x.ok)load()}catch(e){g("sm").textContent="Firewall service unreachable."}}}
+}
+function dl(ext,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download="llmguard-events-"+new Date().toISOString().slice(0,10)+"."+ext;a.click();URL.revokeObjectURL(a.href)}
+function openD(e){if(!e)return;
+  const f=[["Time",tm(e.timestamp)],["Severity",sev(e)],["Event ID",e.event_id],["User",user(e)],["Client address",e.client_ip],["Guardrail layer",layer(e.source)],["Rule triggered",e.rule_triggered||"-"],["Reason",e.reason||"-"],["HTTP status",e.status_code],["Prompt length",e.prompt_length+" characters"],["Classifier score",e.jailbreak_score?e.jailbreak_score.toFixed(4):"Not scored"]];
+  $("#drb").innerHTML='<dl>'+f.map(([k,v])=>'<dt>'+k+'</dt><dd>'+esc(v)+'</dd>').join("")+'<dt>Prompt sample</dt><dd><pre>'+esc(e.prompt_sample||"-")+'</pre></dd><dt>Raw record as stored for SIEM</dt><dd><pre>'+esc(JSON.stringify(e,null,2))+'</pre></dd></dl>';
+  $("#dr").classList.add("open");$("#dr").setAttribute("aria-hidden","false");$("#drx").focus()}
+const closeD=()=>{$("#dr").classList.remove("open");$("#dr").setAttribute("aria-hidden","true")};
+
+$("#drx").onclick=closeD;document.addEventListener("keydown",e=>{if(e.key==="Escape")closeD()});
+$("#refresh").onclick=load;$("#range").onchange=render;window.onhashchange=render;
+$("#auto").onchange=()=>{clearInterval(S.timer);if($("#auto").checked)S.timer=setInterval(load,15000)};
+const th=m=>{document.documentElement.dataset.theme=m;try{localStorage.setItem("llmg-theme",m)}catch(e){}};
+$("#theme").onclick=()=>th(document.documentElement.dataset.theme==="dark"?"light":"dark");
+let saved=null;try{saved=localStorage.getItem("llmg-theme")}catch(e){}
+th(saved||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"));
+render();load();S.timer=setInterval(load,15000);
+</script>
+</body>
+</html>

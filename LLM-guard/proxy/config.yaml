@@ -1,0 +1,48 @@
+# LLM-Guard proxy configuration.
+
+listen_addr: ":8080"
+
+upstream:
+  type: llama
+  base_url: "http://localhost:11434"
+  api_key_env: ""
+
+  default_model: "llama3.2:3b"     # used for every request unless premium_model is explicitly requested
+  premium_model: "llama3.1:8b"     # opt-in only client must send this exact model name to trigger it
+
+  premium_timeout_seconds: 20      # how long we wait on premium model before falling back to default model
+  default_num_predict: 500         # cap for default_model direct answers
+  premium_num_predict: 400         # cap for premium_model answer (shortens the race itself)
+  fallback_num_predict: 300        # cap when premium timed out and we fell back to default_model
+
+dlp:
+  enabled: true
+  base_url: "http://127.0.0.1:9100"
+
+rules:
+  enabled: true
+  max_chars: 4000
+  firewall_url: "http://127.0.0.1:5001"
+  decision_log_path: "logs/rules_decisions.jsonl"
+  harden_system_prompt: true
+
+rbac:
+  enabled: true
+  issuer_url: "http://localhost:8081/realms/llmguard"
+  jwks_url: "http://localhost:8081/realms/llmguard/protocol/openid-connect/certs"
+  client_id: "llmguard-proxy"
+  role_admin_models: "default,premium"
+  role_admin_max_chars: "4000"
+  role_employee_models: "default,premium"
+  role_employee_max_chars: "4000"
+  role_guest_models: "default"
+  role_guest_max_chars: "1000"
+
+outputguard:
+  enabled: true
+  flag_log_path: "logs/outputguard_flags.jsonl"
+
+telemetry:
+  enabled: true
+  local_log_path: "logs/telemetry_events.jsonl"
+  sidecar_url: "http://127.0.0.1:9200"
